@@ -12,7 +12,7 @@ What *is* done and verified:
 | `Dockerfile` (multi-stage, non-root, health check) | **built and tested in CI** (job `image`: build, run, non-root check, verifier against the container). Not built on the development machine (no Docker there). Used for Option B, not for Vercel |
 | Dependency advisories | `pip-audit` on the production pins: **no known vulnerabilities**; `npm audit` (production, and all): **0 vulnerabilities** (2026-11-09) |
 | CI/CD (`.github/workflows/ci.yml`) | **ran on GitHub: all 7 jobs green** on the first push (backend, frontend, e2e, mutation, image, gate, deploy) |
-| Hosting configuration (`vercel.json`, `api/index.py`, `requirements.txt`, `.python-version`) | written and tested locally (entrypoint serves the read-only demo through the ASGI test client); **not yet deployed** |
+| Hosting configuration (`vercel.json` with a `services` block, `backend/pyproject.toml` `[tool.vercel]`, `backend/requirements.txt`, `backend/.python-version`) | written; the backend runs as the read-only demo when `VERCEL=1` (tested locally through the ASGI test client); **not yet deployed, so the Vercel build itself is unverified** |
 | External verification (`scripts/verify_deployment.py`) | rehearsed against local production-mode servers only |
 
 ## Hosting platform evaluation (2026-11-09)
@@ -48,15 +48,22 @@ Sources: [Vercel function limits](https://vercel.com/docs/functions/limitations)
 ## Deploying to Vercel (selected): step by step
 
 ### Already done
-1. Code on GitHub (`habiba-998/athar`), CI green, `vercel.json` / `api/index.py` / `requirements.txt` in place, entrypoint tested locally.
+1. Code on GitHub (`habiba-998/athar`), CI green, Services layout in place, backend defaults tested locally.
+
+### How the project is laid out for Vercel (one project, two services)
+`vercel.json` uses **Vercel Services** (Beta, available on all plans per Vercel's docs): service `frontend` (root `frontend/`, the Vite app) and service `backend` (root `backend/`, FastAPI, entrypoint `app.main:app`). Rewrites send `/api/*` to the backend and everything else to the frontend, so the browser only ever talks to its own origin: **no API base URL, no localhost, no CORS**. The backend receives the original `/api/...` path, which is exactly how its routes are defined. On Vercel (`VERCEL=1`) the backend defaults to the read-only demo with a `/tmp` database (see `backend/app/__init__.py`), so **no environment variable and no secret is required**. CORS: same origin needs none; the demo allows no cross-origin callers unless `ATHAR_CORS_ORIGINS` is set (for a custom frontend domain on a different origin).
+
+### About "Vercel detects multiple FastAPI applications"
+I could not see the exact message from your dashboard, so the cause is **not confirmed**. What I verified is the repository: there is exactly one FastAPI application (`backend/app/main.py`), one Python project root, and no stray entrypoint shims (`api/`, root `requirements.txt` and `frontend/vercel.json` were removed because each looked like another app or project; a test enforces this). The first attempt used a root-level shim (`api/index.py` importing the backend), which is the most likely source of a second "application". The **production entry point is `backend/app/main.py`, imported as the module `app.main`** (the package uses relative imports, so a bare-file import would fail; that is why `[tool.vercel] entrypoint = "app.main:app"` and the explicit `services` block are set). If Vercel still reports the ambiguity, send me the exact text.
 
 ### Needs your authorisation (I cannot sign in for you and never ask for passwords or tokens)
-1. **Sign in to Vercel** (https://vercel.com/login, "Continue with GitHub" is simplest) in the browser pane. The free **Hobby** plan is enough; do not add a card or upgrade.
-2. **Import the repository**: *Add New > Project > Import* `habiba-998/athar`. If Vercel asks to install its GitHub app, approve it for that repository only.
-3. **Project settings** (I will drive these once you are signed in): Framework Preset *Other*, Root Directory `./`, leave Build/Install/Output at the values read from `vercel.json`. **No environment variable or secret is required**; the defaults in `api/index.py` are non-secret.
-4. **Deploy.** Vercel builds the frontend, installs the Python dependencies and publishes `https://<project>.vercel.app`: a permanent HTTPS address for as long as the project exists.
-5. **Gate production on CI** (recommended): create a branch named `release` (the CI deploy job creates it on the first green run), then *Project Settings > Git > Production Branch = `release`*. From then on pushes to `main` only create preview deployments; only the CI `deploy` job, after the `gate` job passed, moves `release`.
-6. In GitHub *Settings > Secrets and variables > Actions > Variables* add `PUBLIC_URL` (the verified address) so the pipeline re-verifies every release.
+The built-in browser pane could not hold a Vercel login, so use **your own browser**:
+1. Sign in at https://vercel.com (the free **Hobby** plan; do not add a card or upgrade).
+2. *Add New > Project > Import* `habiba-998/athar` (approve Vercel's GitHub app for that repository only).
+3. Settings on the import screen: **Root Directory `./`** (the repository root, where `vercel.json` is). If a *Framework Preset* is required choose **Services** if it is offered, otherwise **Other**. Leave build/install/output empty: they come from the services. **Add no environment variables.**
+4. Click **Deploy** and wait. Vercel publishes `https://<project>.vercel.app`, a permanent HTTPS address while the project exists.
+5. Send me that address. If the build fails, copy the build log (not any token) to me.
+6. **Gate production on CI** (afterwards): *Project Settings > Git > Production Branch = `release`*; the CI `deploy` job moves that branch only after the gate is green. Then add the GitHub Actions variable `PUBLIC_URL`.
 
 ### Verification (I run these once the address exists)
 ```powershell
@@ -66,6 +73,9 @@ then the device profiles (Android, iPhone, tablet, desktop; English and Arabic) 
 
 ### Why a red check cannot reach production
 Vercel's production branch is `release`. Only the CI `deploy` job can update it, `deploy` needs `gate`, and `gate` needs all five jobs. A failing job therefore stops the promotion; the previous release stays live.
+
+## Fallback if Vercel Services cannot host the backend
+Services is a Beta feature. If the build fails in a way I cannot fix from the log, the compatible free alternative that keeps the frontend on Vercel is: backend as the Docker image on a no-card host (for example a Hugging Face Docker Space, which serves on one port and is free but has an ephemeral disk; **unverified here**), frontend on Vercel built with `VITE_API_BASE=https://<backend-address>` and the backend started with `ATHAR_CORS_ORIGINS=https://<project>.vercel.app`. I would only do this after the Services attempt fails.
 
 ## Option B: any container host
 
@@ -78,10 +88,10 @@ Put it behind a TLS-terminating proxy or platform load balancer. Set `ATHAR_TRUS
 
 ## Option C: split frontend and API
 
-Frontend on a static host (Vercel config in `frontend/vercel.json`), API as in A or B.
+Frontend on a static host (config in `deploy/vercel.frontend-only.json`: copy it to `vercel.json` of a project whose Root Directory is `frontend`), API as in Option B.
 1. Deploy the API and note its https origin.
 2. Build the frontend with `VITE_API_BASE=https://<api-origin>` (no trailing slash; **never put a secret here, it is public**).
-3. In `frontend/vercel.json` replace `REPLACE_WITH_YOUR_API_ORIGIN` in the CSP `connect-src` (a placeholder is shipped on purpose; no URL is guessed).
+3. In that file replace `REPLACE_WITH_YOUR_API_ORIGIN` in the CSP `connect-src` (a placeholder is shipped on purpose; no URL is guessed).
 4. On the API set `ATHAR_CORS_ORIGINS=https://<frontend-origin>` (no wildcards accepted).
 5. Run the verifier against the **frontend** URL and again against the API.
 

@@ -313,45 +313,62 @@ class TestDeploymentFiles:
         ignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
         assert ".env" in ignore and "!.env.example" in ignore and "node_modules" in ignore
 
-    def test_vercel_project_config_routes_api_to_the_function_and_the_rest_to_the_app(self):
+    def test_vercel_services_config_declares_both_services_and_routes_api_before_the_catch_all(self):
         v = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
-        assert v["outputDirectory"] == "frontend/dist" and "frontend" in v["buildCommand"]
-        assert {"source": "/api/:path*", "destination": "/api/index"} in v["rewrites"]
-        assert any(r["destination"] == "/index.html" and "api/" in r["source"] for r in v["rewrites"])   # app shell, never for /api
-        assert v["functions"]["api/index.py"]["includeFiles"] == "backend/app/**" and v["functions"]["api/index.py"]["maxDuration"] >= 60
+        assert v["services"]["frontend"]["root"] == "frontend/"
+        be = v["services"]["backend"]
+        assert be["root"] == "backend/" and be["framework"] == "fastapi" and be["entrypoint"] == "app.main:app"
+        assert (BACKEND / "app" / "main.py").is_file()                                   # the entrypoint module exists under the service root
+        assert v["rewrites"][0] == {"source": "/api/(.*)", "destination": {"service": "backend"}}      # most specific first
+        assert v["rewrites"][-1] == {"source": "/(.*)", "destination": {"service": "frontend"}}
+        for invalid_with_services in ("builds", "functions", "buildCommand", "installCommand", "outputDirectory", "framework"):
+            assert invalid_with_services not in v, invalid_with_services                  # these keys belong inside a service
         hdr = {h["key"]: h["value"] for h in v["headers"][0]["headers"]}
         assert "frame-ancestors 'none'" in hdr["Content-Security-Policy"] and "connect-src 'self'" in hdr["Content-Security-Policy"]
         assert hdr["Strict-Transport-Security"].startswith("max-age=") and hdr["X-Content-Type-Options"] == "nosniff"
         text = json.dumps(v)
         assert "localhost" not in text and "127.0.0.1" not in text and not re.search(r"(?i)token|secret|password", text)
-        assert (ROOT / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
+        assert (BACKEND / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
+        assert 'entrypoint = "app.main:app"' in (BACKEND / "pyproject.toml").read_text(encoding="utf-8")
 
-    def test_the_vercel_requirements_equal_the_audited_production_pins(self):
+    def test_vercel_sees_exactly_one_python_app_and_one_dependency_manifest(self):
+        """Why the import once reported several FastAPI apps is unknown (the error text was not available); the repository now
+        contains exactly one ASGI application, one Python project root for Vercel, and no stray entrypoint shims."""
+        apps = [p for p in ROOT.rglob("*.py") if "FastAPI(" in p.read_text(encoding="utf-8", errors="ignore")
+                and not {"node_modules", "tests", ".venv", "__pycache__"} & set(p.relative_to(ROOT).parts)]
+        assert [p.relative_to(ROOT).as_posix() for p in apps] == ["backend/app/main.py"]
+        assert not (ROOT / "api").exists() and not (ROOT / "requirements.txt").exists() and not (ROOT / "frontend" / "vercel.json").exists()
+        assert not (ROOT / "pyproject.toml").exists()
+
+    def test_the_backend_runtime_requirements_equal_the_audited_production_pins(self):
         parse = lambda p: dict(l.strip().split("==") for l in p.read_text(encoding="utf-8").splitlines() if "==" in l and not l.startswith("#"))  # noqa: E731
-        assert parse(ROOT / "requirements.txt") == parse(BACKEND / "requirements.prod.txt")
+        assert parse(BACKEND / "requirements.txt") == parse(BACKEND / "requirements.prod.txt")
+        assert not ({"pytest", "mypy", "coverage", "httpx"} & set(parse(BACKEND / "requirements.txt")))
 
-    def test_the_vercel_entrypoint_is_the_read_only_demo_without_any_secret(self):
-        parts = [
-            "import sys, json, importlib.util as u",
-            f"sys.path.insert(0, {str(BACKEND)!r})",
-            "from fastapi.testclient import TestClient",
-            f"sp = u.spec_from_file_location('index', {str(ROOT / 'api' / 'index.py')!r})",
-            "m = u.module_from_spec(sp); sp.loader.exec_module(m)",
-            "c = TestClient(m.app); r = c.get('/api/auth/status').json()",
-            "w = c.put('/api/environment', json={})",
-            "s = c.post('/api/simulate', json={'actions': [{'kind': 'remove_relationship', 'relationship_id': 'r03'}]})",
-            "print(json.dumps({'status': r, 'write': [w.status_code, w.json()], 'sim': [s.status_code, s.json().get('ephemeral')], "
-            "'docs': m.app.docs_url, 'h': c.get('/api/health').json()['mode']}))",
-        ]
+    def test_on_vercel_the_backend_defaults_to_the_read_only_demo_without_any_secret(self):
+        base = {k: v for k, v in os.environ.items() if not k.startswith("ATHAR_")}
+        probe = "; ".join(["import sys, json, os", f"sys.path.insert(0, {str(BACKEND)!r})", "import app",
+                           "print(json.dumps({k: os.environ.get(k) for k in ('ATHAR_MODE', 'ATHAR_DB', 'ATHAR_TRUST_PROXY', 'ATHAR_HSTS', 'ATHAR_ADMIN_TOKEN', 'ATHAR_API_TOKEN')}))"])
+        run = lambda env: json.loads(subprocess.run([sys.executable, "-I", "-c", probe], capture_output=True, text=True, cwd=BACKEND, timeout=60, env=env).stdout.strip().splitlines()[-1])  # noqa: E731
+        on = run({**base, "VERCEL": "1"})
+        assert on == {"ATHAR_MODE": "demo", "ATHAR_DB": "/tmp/athar.db", "ATHAR_TRUST_PROXY": "1", "ATHAR_HSTS": "1", "ATHAR_ADMIN_TOKEN": None, "ATHAR_API_TOKEN": None}
+        assert all(v is None for v in run(base).values())                                  # nothing changes off Vercel
+        assert run({**base, "VERCEL": "1", "ATHAR_MODE": "local"})["ATHAR_MODE"] == "local"  # project settings win
+
+    def test_the_vercel_runtime_serves_the_read_only_demo(self):
+        parts = ["import sys, json", f"sys.path.insert(0, {str(BACKEND)!r})", "from fastapi.testclient import TestClient", "import app.main as m",
+                 "c = TestClient(m.app); r = c.get('/api/auth/status').json()", "w = c.put('/api/environment', json={})",
+                 "s = c.post('/api/simulate', json={'actions': [{'kind': 'remove_relationship', 'relationship_id': 'r03'}]})",
+                 "print(json.dumps({'status': r, 'write': [w.status_code, w.json()], 'sim': [s.status_code, s.json().get('ephemeral')], 'docs': m.app.docs_url}))"]
         r = subprocess.run([sys.executable, "-I", "-c", "; ".join(parts)], capture_output=True, text=True, cwd=BACKEND, timeout=120,
-                           env={**{k: v for k, v in os.environ.items() if not k.startswith("ATHAR_")}, "ATHAR_DB": ":memory:"})
+                           env={**{k: v for k, v in os.environ.items() if not k.startswith("ATHAR_")}, "VERCEL": "1", "ATHAR_DB": ":memory:"})
         assert r.returncode == 0, r.stderr[-500:]
         out = json.loads(r.stdout.strip().splitlines()[-1])
         assert out["status"]["mode"] == "demo" and out["status"]["read_only"] is True and out["status"]["admin_token_supported"] is False
-        assert out["write"] == [403, {"error": "read_only_demo"}] and out["sim"] == [200, True] and out["docs"] is None and out["h"] == "demo"
+        assert out["write"] == [403, {"error": "read_only_demo"}] and out["sim"] == [200, True] and out["docs"] is None
 
     def test_vercel_config_has_security_headers_and_a_placeholder_for_the_api_origin(self):
-        v = json.loads((ROOT / "frontend" / "vercel.json").read_text(encoding="utf-8"))
+        v = json.loads((ROOT / "deploy" / "vercel.frontend-only.json").read_text(encoding="utf-8"))
         hdrs = {h["key"]: h["value"] for h in v["headers"][0]["headers"]}
         assert "frame-ancestors 'none'" in hdrs["Content-Security-Policy"] and hdrs["X-Content-Type-Options"] == "nosniff"
         assert "REPLACE_WITH_YOUR_API_ORIGIN" in hdrs["Content-Security-Policy"]           # never a guessed URL
