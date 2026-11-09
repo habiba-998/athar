@@ -306,30 +306,34 @@ class TestLogging:
 
 class TestDeploymentFiles:
     def test_dockerfile_is_multistage_non_root_with_healthcheck_and_no_secrets(self):
-        d = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        d = (ROOT / "deploy" / "Dockerfile").read_text(encoding="utf-8")
         assert "AS web" in d and "AS run" in d and "USER athar" in d and "HEALTHCHECK" in d and "requirements.prod.txt" in d
         assert "ATHAR_MODE=demo" in d
         assert not re.search(r"ATHAR_(ADMIN|API)_TOKEN=[A-Za-z0-9_\-]{8,}", d)              # no literal secret baked into the image
-        ignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+        ignore = (ROOT / "deploy" / "Dockerfile.dockerignore").read_text(encoding="utf-8")
         assert ".env" in ignore and "!.env.example" in ignore and "node_modules" in ignore
 
     def test_vercel_services_config_declares_both_services_and_routes_api_before_the_catch_all(self):
         v = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
-        assert v["services"]["frontend"]["root"] == "frontend/"
+        fe = v["services"]["frontend"]
+        assert fe["root"] == "frontend/" and (ROOT / "frontend" / "index.html").is_file()
+        assert (fe["installCommand"], fe["buildCommand"], fe["outputDirectory"]) == ("npm ci", "npm run build", "dist")   # explicit, not defaults
+        assert json.loads((ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))["scripts"]["build"].endswith("vite build")
         be = v["services"]["backend"]
         assert be["root"] == "backend/" and be["framework"] == "fastapi" and be["entrypoint"] == "app.main:app"
         assert (BACKEND / "app" / "main.py").is_file()                                   # the entrypoint module exists under the service root
         assert v["rewrites"][0] == {"source": "/api/(.*)", "destination": {"service": "backend"}}      # most specific first
         assert v["rewrites"][-1] == {"source": "/(.*)", "destination": {"service": "frontend"}}
-        for invalid_with_services in ("builds", "functions", "buildCommand", "installCommand", "outputDirectory", "framework"):
-            assert invalid_with_services not in v, invalid_with_services                  # these keys belong inside a service
-        hdr = {h["key"]: h["value"] for h in v["headers"][0]["headers"]}
+        assert set(v["services"]) == {"frontend", "backend"} and len(v["rewrites"]) == 2        # no duplicate services, no extra routes
+        for invalid_with_services in ("builds", "functions", "buildCommand", "installCommand", "outputDirectory", "framework", "headers", "routes"):
+            assert invalid_with_services not in v, invalid_with_services                  # build/runtime/header rules live inside a service
+        hdr = {h["key"]: h["value"] for h in fe["headers"][0]["headers"]}
         assert "frame-ancestors 'none'" in hdr["Content-Security-Policy"] and "connect-src 'self'" in hdr["Content-Security-Policy"]
         assert hdr["Strict-Transport-Security"].startswith("max-age=") and hdr["X-Content-Type-Options"] == "nosniff"
         text = json.dumps(v)
         assert "localhost" not in text and "127.0.0.1" not in text and not re.search(r"(?i)token|secret|password", text)
         assert (BACKEND / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
-        assert 'entrypoint = "app.main:app"' in (BACKEND / "pyproject.toml").read_text(encoding="utf-8")
+        assert "vercel" not in (BACKEND / "pyproject.toml").read_text(encoding="utf-8")        # one place declares the entrypoint: vercel.json
 
     def test_vercel_sees_exactly_one_python_app_and_one_dependency_manifest(self):
         """Why the import once reported several FastAPI apps is unknown (the error text was not available); the repository now
@@ -338,7 +342,7 @@ class TestDeploymentFiles:
                 and not {"node_modules", "tests", ".venv", "__pycache__"} & set(p.relative_to(ROOT).parts)]
         assert [p.relative_to(ROOT).as_posix() for p in apps] == ["backend/app/main.py"]
         assert not (ROOT / "api").exists() and not (ROOT / "requirements.txt").exists() and not (ROOT / "frontend" / "vercel.json").exists()
-        assert not (ROOT / "pyproject.toml").exists()
+        assert not (ROOT / "pyproject.toml").exists() and not (ROOT / "Dockerfile").exists()      # a root Dockerfile could read as another app
 
     def test_the_backend_runtime_requirements_equal_the_audited_production_pins(self):
         parse = lambda p: dict(l.strip().split("==") for l in p.read_text(encoding="utf-8").splitlines() if "==" in l and not l.startswith("#"))  # noqa: E731

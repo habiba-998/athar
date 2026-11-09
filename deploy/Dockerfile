@@ -1,5 +1,5 @@
 # ATHAR single-service image: the FastAPI backend also serves the built single-page app (same origin, no CORS needed).
-# Build:  docker build -t athar .
+# Build (from the repository root):  docker build -f deploy/Dockerfile -t athar .
 # Run:    docker run --rm -p 8000:8000 -e ATHAR_ADMIN_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32))')" athar
 # The default mode is the public READ-ONLY demo (ATHAR_MODE=demo). See docs/DEPLOYMENT.md.
 

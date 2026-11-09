@@ -51,7 +51,23 @@ Sources: [Vercel function limits](https://vercel.com/docs/functions/limitations)
 1. Code on GitHub (`habiba-998/athar`), CI green, Services layout in place, backend defaults tested locally.
 
 ### How the project is laid out for Vercel (one project, two services)
-`vercel.json` uses **Vercel Services** (Beta, available on all plans per Vercel's docs): service `frontend` (root `frontend/`, the Vite app) and service `backend` (root `backend/`, FastAPI, entrypoint `app.main:app`). Rewrites send `/api/*` to the backend and everything else to the frontend, so the browser only ever talks to its own origin: **no API base URL, no localhost, no CORS**. The backend receives the original `/api/...` path, which is exactly how its routes are defined. On Vercel (`VERCEL=1`) the backend defaults to the read-only demo with a `/tmp` database (see `backend/app/__init__.py`), so **no environment variable and no secret is required**. CORS: same origin needs none; the demo allows no cross-origin callers unless `ATHAR_CORS_ORIGINS` is set (for a custom frontend domain on a different origin).
+`vercel.json` uses **Vercel Services** (Beta, all plans per Vercel's docs). Exactly two services, no duplicates:
+
+| Service | Root | What it is | Settings |
+|---|---|---|---|
+| `frontend` | `frontend/` | the Vite + React single-page app (entry `frontend/index.html` -> `src/main.tsx`) | `npm ci`, `npm run build`, output `dist`, security headers and asset caching (service-scoped `headers`) |
+| `backend` | `backend/` | the **only** FastAPI application, `backend/app/main.py`, loaded as module `app.main` (variable `app`) | framework `fastapi`, entrypoint `app.main:app`, dependencies from `backend/requirements.txt` (pinned runtime set), Python 3.12 from `backend/.python-version` |
+
+**Which service handles which route** (top-level `rewrites`, evaluated in order, first match wins; the service receives the original path):
+
+| Public request | Handled by | Notes |
+|---|---|---|
+| `/api/*` (health, ready, auth, environment, analysis, plans, sensitivity, evidence, services, simulate, explain, ...) | `backend` | all 30 API paths the frontend calls start with `/api` and exist on the backend (checked) |
+| `/` and every other path (`/assets/*`, `index.html`, fonts) | `frontend` | static files; the app has no client-side routes, so unknown paths are a plain 404 |
+
+The browser only talks to its own origin: **no API base URL, no localhost, no CORS**; `VITE_API_BASE` is empty. **Service bindings are not needed**: bindings are only for one service calling another from server code, and here the browser reaches the backend through the public rewrite. On Vercel (`VERCEL=1`) the backend defaults to the read-only demo with a `/tmp` database (`backend/app/__init__.py`), so **no environment variable and no secret is required**. CORS: same origin needs none; the demo allows no cross-origin callers unless `ATHAR_CORS_ORIGINS` is set.
+
+**What is documented by Vercel and what is not.** Documented: the `services` key, `root`, `framework`, `entrypoint` (module:variable for Python), per-service `installCommand` / `buildCommand` / `outputDirectory` / `headers`, top-level `rewrites` with `destination.service`, original-path pass-through, Hobby plan availability (Beta), 300 s maximum duration on Hobby. **Not stated in the docs I read, so only provable by a real build:** that `app.main:app` resolves relative to `backend/` (the docs' own example `root: backend/` with `main:app` implies it), where Vercel looks for `requirements.txt` and `.python-version` inside a service root, and the dashboard Framework Preset. Local emulation (static service + backend behind one origin, 36/36 verifier checks, browser workflow) proves ATHAR's side, not Vercel's.
 
 ### About "Vercel detects multiple FastAPI applications"
 I could not see the exact message from your dashboard, so the cause is **not confirmed**. What I verified is the repository: there is exactly one FastAPI application (`backend/app/main.py`), one Python project root, and no stray entrypoint shims (`api/`, root `requirements.txt` and `frontend/vercel.json` were removed because each looked like another app or project; a test enforces this). The first attempt used a root-level shim (`api/index.py` importing the backend), which is the most likely source of a second "application". The **production entry point is `backend/app/main.py`, imported as the module `app.main`** (the package uses relative imports, so a bare-file import would fail; that is why `[tool.vercel] entrypoint = "app.main:app"` and the explicit `services` block are set). If Vercel still reports the ambiguity, send me the exact text.
@@ -80,7 +96,7 @@ Services is a Beta feature. If the build fails in a way I cannot fix from the lo
 ## Option B: any container host
 
 ```bash
-docker build -t athar .
+docker build -f deploy/Dockerfile -t athar .
 docker run --rm -p 8000:8000 -e ATHAR_ADMIN_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32))')" athar
 ```
 

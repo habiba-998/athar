@@ -102,7 +102,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build the production image
-        run: docker build -t athar:ci .
+        run: docker build -f deploy/Dockerfile -t athar:ci .
       - name: Run it as the public demo and verify it from the outside
         run: |
           TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"

@@ -7,7 +7,3 @@ python_version = "3.12"
 strict = false
 ignore_missing_imports = true
 plugins = ["pydantic.mypy"]
-
-# Vercel: the ASGI application is app/main.py as the package module `app.main` (relative imports need the package), not a bare file.
-[tool.vercel]
-entrypoint = "app.main:app"

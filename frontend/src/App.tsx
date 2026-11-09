@@ -51,7 +51,7 @@ export default function App() {
   const [recView, setRecView] = useState<'recs' | 'plans'>('recs')
   const [evView, setEvView] = useState<'evidence' | 'assumptions'>('evidence')
   const [auth, setAuth] = useState<AuthStatus | null>(null)
-  const [canWrite, setCanWrite] = useState(true)
+  const [canWrite, setCanWrite] = useState<boolean | null>(null)   // unknown until /api/auth/whoami answers
   const [adminOpen, setAdminOpen] = useState(false)
   const [data, setData] = useState<Data | null>(null)
   const [meta, setMeta] = useState<EnvMeta | null>(null)
@@ -169,7 +169,7 @@ export default function App() {
     void load()
   }
 
-  const readOnly = !!auth?.read_only && !canWrite
+  const readOnly = !!auth?.read_only && canWrite !== true   // read-only until the server confirms this caller may write
   const simulateAction = (a: SimAction) => {
     setQueue((q) => (q.some((x) => actionKey(x) === actionKey(a)) ? q : [...q, a]))
     setSim(null)
