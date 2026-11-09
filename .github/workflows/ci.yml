@@ -130,7 +130,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Promote this exact, tested commit to the release branch
+        with: { fetch-depth: 0 }      # full history: a depth-1 clone cannot prove the push is a fast-forward and is rejected
+      - name: Promote this exact, tested commit to the release branch (fast-forward only; never forced)
         run: git push origin "${GITHUB_SHA}:refs/heads/release"
       - name: Verify the public deployment from outside (retries while Vercel builds and starts the new version)
         env: { PUBLIC_URL: "${{ vars.PUBLIC_URL }}" }
