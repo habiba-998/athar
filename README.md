@@ -49,7 +49,7 @@ python -m uvicorn app.main:app --port 8200      # serves API and the built app o
 
 `ATHAR_MODE=demo` is the **public read-only mode**: visitors can read and run stateless simulations; every write needs the admin token. See [Deployment](docs/DEPLOYMENT.md).
 
-> **Deployment status: not deployed.** No public URL exists. Ready: Dockerfile, Render Blueprint, Vercel config, `.github/workflows/ci.yml` (tests, mutation check, image build and test, release gate, deploy-only-if-green), `scripts/verify_deployment.py`, and a local git commit. Publishing needs your GitHub and Render accounts: the exact steps are in [Deployment](docs/DEPLOYMENT.md). Do not quote any URL that has not passed the verifier from outside.
+> **Deployment status: not deployed.** No public URL exists. Ready: Vercel project config and Python function entrypoint (selected host; the free Hobby plan), Dockerfile (tested in CI), `.github/workflows/ci.yml` (tests, mutation check, image build and test, release gate, deploy-only-if-green), `scripts/verify_deployment.py`, and a local git commit. Publishing needs your GitHub and Render accounts: the exact steps are in [Deployment](docs/DEPLOYMENT.md). Do not quote any URL that has not passed the verifier from outside.
 
 ## Configuration
 

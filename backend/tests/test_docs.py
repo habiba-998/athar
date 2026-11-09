@@ -94,9 +94,9 @@ def test_deployment_doc_exists_and_never_claims_a_live_url():
     text = read("DEPLOYMENT")
     assert len(text) > 800 and "not deployed" in text.lower()
     assert "REPLACE_WITH_YOUR_API_ORIGIN" in text                       # placeholders, never a guessed URL
-    urls = re.findall(r"https://[A-Za-z0-9.\-]+\.[a-z]{2,}", text)
-    allowed = {"https://render.com", "https://github.com", "https://api.example.org", "https://example.org"}
-    assert all(u in allowed or u.startswith(("https://<",)) for u in urls), urls
+    urls = re.findall(r"https://[A-Za-z0-9.\-<>]+\.[a-z]{2,}", text)
+    # no concrete deployment address may appear: placeholders (<project>) and documentation sites only
+    assert not [u for u in urls if u.endswith((".vercel.app", ".onrender.com", ".fly.dev", ".up.railway.app")) and not u.startswith("https://<")], urls
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "Deployment status: not deployed" in readme
 

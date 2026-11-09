@@ -9,28 +9,34 @@ What *is* done and verified:
 | Item | State |
 |---|---|
 | Single production image/service (FastAPI serves the built app: one origin, no CORS needed) | built and exercised as a simulated image: clean venv from `backend/requirements.prod.txt`, `pip check` clean, image layout reproduced, verifier 36/36 |
-| `Dockerfile` (multi-stage, non-root, health check) | written; **not built on this machine (no Docker)**. The CI job `image` builds it, starts it, checks it runs as non-root and runs the verifier against it |
+| `Dockerfile` (multi-stage, non-root, health check) | **built and tested in CI** (job `image`: build, run, non-root check, verifier against the container). Not built on the development machine (no Docker there). Used for Option B, not for Vercel |
 | Dependency advisories | `pip-audit` on the production pins: **no known vulnerabilities**; `npm audit` (production, and all): **0 vulnerabilities** (2026-11-09) |
-| CI/CD (`.github/workflows/ci.yml`) | written; **has not run yet** (no repository exists remotely) |
-| Hosting configuration (`render.yaml`, `frontend/vercel.json`, `.env.example`) | written and parsed; not applied |
+| CI/CD (`.github/workflows/ci.yml`) | **ran on GitHub: all 7 jobs green** on the first push (backend, frontend, e2e, mutation, image, gate, deploy) |
+| Hosting configuration (`vercel.json`, `api/index.py`, `requirements.txt`, `.python-version`) | written and tested locally (entrypoint serves the read-only demo through the ASGI test client); **not yet deployed** |
 | External verification (`scripts/verify_deployment.py`) | rehearsed against local production-mode servers only |
 
-## Hosting platform evaluation
+## Hosting platform evaluation (2026-11-09)
 
-Requirements: run a stateful Python API with a small SQLite file, serve a static React build, permanent HTTPS URL, low cost, deployable from a repository, no cloud expertise needed. Facts below are from general knowledge of these products and **must be re-checked on the vendor's pricing page before you commit** (plans change).
+ATHAR's actual architecture decides what can host it:
 
-| Platform | Fit | Notes |
-|---|---|---|
-| **Render (recommended)** | Docker web service from a Blueprint; free `*.onrender.com` HTTPS URL that stays the same for the life of the service; deploy hook for CI; custom domains with managed TLS | Free instances sleep when idle (first request can take tens of seconds) and have an ephemeral disk. A paid instance can attach a persistent disk. |
-| Fly.io | Docker, volumes for SQLite, regional placement | Needs a payment card and the `flyctl` CLI; more operational surface than needed here. |
-| Google Cloud Run / Azure Container Apps | Excellent HTTPS and scaling | Needs a cloud project, billing and IAM; SQLite on local disk is ephemeral (would need a database or a mounted bucket). Over-built for a demo. |
-| Railway / Koyeb | Similar to Render | Free allowances change often. |
-| Vercel / Netlify | Excellent for the **React build only** | The API is a long-running stateful process with SQLite and background caches; serverless functions are a poor fit. Use only for a split layout (Option C). |
-| Hugging Face Spaces (Docker) | Free, public | Port and storage conventions differ; not a general application host. |
+* a **stateful Python ASGI API** (FastAPI, `contextvars`, threads, in-memory caches, NetworkX) with **CPU-heavy requests** (plans 1-6 s, sensitivity 7-19 s, first request on a cold process);
+* a **SQLite file** for the audit trail and stored environment (local mode);
+* a **static React build**;
+* a public **read-only demo mode** that is stateless by design (no writes, simulations not stored).
 
-**Choice: Render, single Docker service.** It serves API and app from one origin (so nothing to "connect" between two services), gives a permanent HTTPS URL, and has a deploy hook the CI pipeline can call.
+Requirements from the owner: free or lowest cost, **no card and no charges without approval**, HTTPS, deploy from the GitHub repository, no localhost in production.
 
-**Persistence.** The public demo is read-only and **deliberately stateless**: it restarts from the synthetic sample, so no persistent disk is needed for it. If you want administrator edits, imported environments and the audit log to survive restarts, use a paid instance with a disk and uncomment the `disk:` block in `render.yaml` (it mounts `/data` and sets `ATHAR_DB=/data/athar.db`). Restart persistence of the local build is verified by `scripts/verify_live.py` (edit, history, evidence and activity survive a real process restart: 26/26 checks).
+| Platform | Fit with this architecture | Cost / account facts found (sources checked 2026-11-09; re-check before relying on them) | Verdict |
+|---|---|---|---|
+| **Vercel (Hobby)** | Static app + Python (FastAPI/ASGI) function in one project; one origin, so no CORS or API base URL. The read-only demo needs no persistence, which suits a function with a read-only filesystem (only `/tmp` is writable). Docs state a 300 s maximum duration on Hobby with Fluid Compute, enough for the slowest request. | Free Hobby plan, deploys from GitHub; no card needed to start. | **Selected** |
+| Cloudflare Pages + Workers | Python Workers are generally available on Pyodide (WebAssembly); FastAPI and Pydantic are listed as supported, NetworkX is pure Python. No SQLite persistence (would need a rewrite to D1 or Durable Objects) and per-request CPU limits on the free plan are far below ATHAR's 0.2-19 s requests. | Free tier exists, but CPU limits make it unsuitable without a paid plan. | Rejected: needs a rewrite and a paid CPU limit |
+| Railway | Runs the Dockerfile as-is, supports volumes (persistent SQLite). | One-time $5 trial credit (30 days or until spent), then a Free plan with small allowances or the $5/month Hobby plan; whether a card is required is reported inconsistently. | Rejected for now: not free for long and may need a card |
+| Fly.io | Runs the Dockerfile, volumes for SQLite. | Sources agree there is **no free allowance for new accounts**: a short trial, then a payment card is required. | Rejected: requires a card and incurs charges |
+| Render | Docker service from a Blueprint. | Free web service sleeps and has an ephemeral disk. | Dropped at the owner's request (the sign-in/setup did not work out) |
+
+**What is lost on Vercel, honestly.** A serverless function has no persistent disk and each instance has its own memory, so the deployment is the **read-only demo only**: no administrator writes (the admin token is deliberately not configured), the audit log and simulation history are not stored, and each cold start rebuilds state from the synthetic sample. Rate limits are per instance. The first request after idle can take a few seconds. If you need persistence, run the Docker image on a host with a volume (Option B) or add an external database (not implemented).
+
+Sources: [Vercel function limits](https://vercel.com/docs/functions/limitations) and [Python runtime](https://vercel.com/docs/functions/runtimes), [Railway plans](https://docs.railway.com/pricing/plans), [Fly.io billing](https://fly.io/docs/about/billing/), [Cloudflare Python Workers](https://developers.cloudflare.com/workers/languages/python/).
 
 ## Modes
 
@@ -39,31 +45,27 @@ Requirements: run a stateful Python API with a small SQLite file, serve a static
 | `ATHAR_MODE=local` (default) | Private instance. Without `ATHAR_API_TOKEN` only loopback clients are accepted; with it, every `/api` call needs the token. Full read/write. |
 | `ATHAR_MODE=demo` | **Public and read-only.** Anyone can read and run *stateless* simulations (not persisted, no AI calls, no audit rows). Every other write is refused with `403 read_only_demo` unless the request carries `ATHAR_ADMIN_TOKEN`. API docs are off, no cross-origin callers by default. A demo **refuses to start** if a configured secret is shorter than 16 characters or the two tokens are equal. |
 
-## Step-by-step: what I did and what only you can do
+## Deploying to Vercel (selected): step by step
 
-### Already done (no action needed)
-1. Production build, simulated image, audits, header/CORS/HTTPS-proxy review, tests and CI definition (see Status).
-2. A local git repository with one commit containing the whole project (see "Repository" below).
+### Already done
+1. Code on GitHub (`habiba-998/athar`), CI green, `vercel.json` / `api/index.py` / `requirements.txt` in place, entrypoint tested locally.
 
-### YOU must do these (each needs your accounts or approval)
-1. **Create an empty GitHub repository** (private or public) named, for example, `athar`. Do not add a README.
-2. **Push the project** (in `athar/`): `git remote add origin https://github.com/<you>/athar.git` then `git push -u origin main`. (Git will ask you to sign in; I never see your credentials.)
-3. **Watch the first CI run** (Actions tab). All of `backend`, `frontend`, `e2e`, `mutation`, `image` must be green; the `gate` job summarises them. If one fails, send me its log and I will fix it.
-4. **Create the Render service**: sign in to Render, **New > Blueprint**, pick the repository, review, **Apply**. Render builds the `Dockerfile`; wait for the deploy to finish. It shows the permanent HTTPS address (`https://<service-name>.onrender.com`).
-5. **Verify from outside** (from your own machine or phone network):
-   ```powershell
-   python scripts/verify_deployment.py https://<the-address-render-shows> --json deployment-report.json
-   ```
-   Every line must say PASS. Then open the address on your phone and desktop (checklist below).
-6. **Turn on continuous deployment through CI** (optional): in Render, *Settings > Deploy Hook* copy the URL; in GitHub *Settings > Secrets and variables > Actions*, add secret `RENDER_DEPLOY_HOOK_URL` and variable `PUBLIC_URL` (the address from step 4). From then on every push to `main` deploys **only if the gate is green**, and the pipeline re-verifies the public URL. In GitHub *Settings > Environments > production* you may add required reviewers for a manual approval.
-7. Give me the verified address and I will put it in the README and the demo script.
+### Needs your authorisation (I cannot sign in for you and never ask for passwords or tokens)
+1. **Sign in to Vercel** (https://vercel.com/login, "Continue with GitHub" is simplest) in the browser pane. The free **Hobby** plan is enough; do not add a card or upgrade.
+2. **Import the repository**: *Add New > Project > Import* `habiba-998/athar`. If Vercel asks to install its GitHub app, approve it for that repository only.
+3. **Project settings** (I will drive these once you are signed in): Framework Preset *Other*, Root Directory `./`, leave Build/Install/Output at the values read from `vercel.json`. **No environment variable or secret is required**; the defaults in `api/index.py` are non-secret.
+4. **Deploy.** Vercel builds the frontend, installs the Python dependencies and publishes `https://<project>.vercel.app`: a permanent HTTPS address for as long as the project exists.
+5. **Gate production on CI** (recommended): create a branch named `release` (the CI deploy job creates it on the first green run), then *Project Settings > Git > Production Branch = `release`*. From then on pushes to `main` only create preview deployments; only the CI `deploy` job, after the `gate` job passed, moves `release`.
+6. In GitHub *Settings > Secrets and variables > Actions > Variables* add `PUBLIC_URL` (the verified address) so the pipeline re-verifies every release.
 
-### Why the gate cannot be bypassed by accident
-`render.yaml` sets `autoDeploy: false`, so Render never deploys on its own. The only automated path is the `deploy` job, which `needs: gate`, which `needs` all five jobs; it runs only on `main`, inside the `production` environment.
+### Verification (I run these once the address exists)
+```powershell
+python scripts/verify_deployment.py https://<project>.vercel.app --json deployment-report.json
+```
+then the device profiles (Android, iPhone, tablet, desktop; English and Arabic) with the Playwright suite pointed at the public address. These run from this laptop, which is not a truly independent network: open the address on your phone over **mobile data** for the real external check.
 
-## Option A: one service on Render (recommended, described above)
-
-Notes: `ATHAR_TRUST_PROXY=1` is set because Render is exactly one trusted proxy hop that appends the client address to `X-Forwarded-For`; only the right-most entry is trusted. `ATHAR_FORCE_HTTPS=1` redirects anything the proxy reports as plain http to https (health and readiness probes are exempt), `ATHAR_HSTS=1` sends `Strict-Transport-Security`. `ATHAR_ADMIN_TOKEN` is generated by Render; read it in the dashboard only if you want administrator writes.
+### Why a red check cannot reach production
+Vercel's production branch is `release`. Only the CI `deploy` job can update it, `deploy` needs `gate`, and `gate` needs all five jobs. A failing job therefore stops the promotion; the previous release stays live.
 
 ## Option B: any container host
 
@@ -92,7 +94,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md#environment-variable-reference); `.env.exa
 | Area | Finding |
 |---|---|
 | Exposed ports | the image exposes only `8000` (`PORT` is honoured); no other listener |
-| Secrets | none in the repository or the image (scanned by a test); tokens from the environment; Render generates the admin token; the frontend bundle holds only `VITE_API_BASE` (public) |
+| Secrets | none in the repository or the image (scanned by a test); no token is needed for the read-only demo (none is configured on Vercel); the frontend bundle holds only `VITE_API_BASE` (public) |
 | Environment | every variable documented and listed in `.env.example`; weak or equal secrets stop a demo from starting |
 | Database | SQLite at `ATHAR_DB`; ephemeral by design on the free tier; unencrypted (documented gap) |
 | CORS | explicit allow-list, no wildcard; the demo defaults to none |
@@ -107,5 +109,5 @@ See [ARCHITECTURE.md](ARCHITECTURE.md#environment-variable-reference); `.env.exa
 - [ ] Desktop Chrome and Edge: dashboard, graph (select a path, search, full screen), simulation, recommendations, plans, evidence.
 - [ ] **Android phone on mobile data**: same flow; rotate; Arabic.
 - [ ] **iPhone (Safari) on mobile data**: same flow; Arabic. *Automated iPhone tests here emulate Safari's viewport and touch on Chromium, not the WebKit engine, so this manual pass is the only real Safari check.*
-- [ ] Restart the service in the Render dashboard; the demo comes back with the sample (stateless by design).
+- [ ] Redeploy or wait for a cold start; the demo comes back with the synthetic sample (stateless by design).
 - [ ] `ATHAR_MODE=demo`, no AI key configured, admin token not shared.

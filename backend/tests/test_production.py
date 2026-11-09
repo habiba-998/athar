@@ -313,11 +313,42 @@ class TestDeploymentFiles:
         ignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
         assert ".env" in ignore and "!.env.example" in ignore and "node_modules" in ignore
 
-    def test_render_blueprint_generates_the_admin_secret_and_hardcodes_none(self):
-        y = (ROOT / "render.yaml").read_text(encoding="utf-8")
-        assert re.search(r"key: ATHAR_ADMIN_TOKEN[^\n]*\n\s+generateValue: true", y) and "value: demo" in y and "healthCheckPath: /api/ready" in y
-        assert "runtime: docker" in y and "autoDeploy: false" in y
-        assert not re.search(r"(?i)(token|key|secret)\s*:\s*[\"']?[A-Za-z0-9_\-]{20,}", y.replace("generateValue", ""))
+    def test_vercel_project_config_routes_api_to_the_function_and_the_rest_to_the_app(self):
+        v = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
+        assert v["outputDirectory"] == "frontend/dist" and "frontend" in v["buildCommand"]
+        assert {"source": "/api/:path*", "destination": "/api/index"} in v["rewrites"]
+        assert any(r["destination"] == "/index.html" and "api/" in r["source"] for r in v["rewrites"])   # app shell, never for /api
+        assert v["functions"]["api/index.py"]["includeFiles"] == "backend/app/**" and v["functions"]["api/index.py"]["maxDuration"] >= 60
+        hdr = {h["key"]: h["value"] for h in v["headers"][0]["headers"]}
+        assert "frame-ancestors 'none'" in hdr["Content-Security-Policy"] and "connect-src 'self'" in hdr["Content-Security-Policy"]
+        assert hdr["Strict-Transport-Security"].startswith("max-age=") and hdr["X-Content-Type-Options"] == "nosniff"
+        text = json.dumps(v)
+        assert "localhost" not in text and "127.0.0.1" not in text and not re.search(r"(?i)token|secret|password", text)
+        assert (ROOT / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
+
+    def test_the_vercel_requirements_equal_the_audited_production_pins(self):
+        parse = lambda p: dict(l.strip().split("==") for l in p.read_text(encoding="utf-8").splitlines() if "==" in l and not l.startswith("#"))  # noqa: E731
+        assert parse(ROOT / "requirements.txt") == parse(BACKEND / "requirements.prod.txt")
+
+    def test_the_vercel_entrypoint_is_the_read_only_demo_without_any_secret(self):
+        parts = [
+            "import sys, json, importlib.util as u",
+            f"sys.path.insert(0, {str(BACKEND)!r})",
+            "from fastapi.testclient import TestClient",
+            f"sp = u.spec_from_file_location('index', {str(ROOT / 'api' / 'index.py')!r})",
+            "m = u.module_from_spec(sp); sp.loader.exec_module(m)",
+            "c = TestClient(m.app); r = c.get('/api/auth/status').json()",
+            "w = c.put('/api/environment', json={})",
+            "s = c.post('/api/simulate', json={'actions': [{'kind': 'remove_relationship', 'relationship_id': 'r03'}]})",
+            "print(json.dumps({'status': r, 'write': [w.status_code, w.json()], 'sim': [s.status_code, s.json().get('ephemeral')], "
+            "'docs': m.app.docs_url, 'h': c.get('/api/health').json()['mode']}))",
+        ]
+        r = subprocess.run([sys.executable, "-I", "-c", "; ".join(parts)], capture_output=True, text=True, cwd=BACKEND, timeout=120,
+                           env={**{k: v for k, v in os.environ.items() if not k.startswith("ATHAR_")}, "ATHAR_DB": ":memory:"})
+        assert r.returncode == 0, r.stderr[-500:]
+        out = json.loads(r.stdout.strip().splitlines()[-1])
+        assert out["status"]["mode"] == "demo" and out["status"]["read_only"] is True and out["status"]["admin_token_supported"] is False
+        assert out["write"] == [403, {"error": "read_only_demo"}] and out["sim"] == [200, True] and out["docs"] is None and out["h"] == "demo"
 
     def test_vercel_config_has_security_headers_and_a_placeholder_for_the_api_origin(self):
         v = json.loads((ROOT / "frontend" / "vercel.json").read_text(encoding="utf-8"))
