@@ -342,6 +342,7 @@ class TestDeploymentFiles:
                 and not {"node_modules", "tests", ".venv", "__pycache__"} & set(p.relative_to(ROOT).parts)]
         assert [p.relative_to(ROOT).as_posix() for p in apps] == ["backend/app/main.py"]
         assert not (ROOT / "api").exists() and not (ROOT / "requirements.txt").exists() and not (ROOT / "frontend" / "vercel.json").exists()
+        assert not (ROOT / ".python-version").exists()                                            # a root Python marker could read as a third app
         assert not (ROOT / "pyproject.toml").exists() and not (ROOT / "Dockerfile").exists()      # a root Dockerfile could read as another app
 
     def test_the_backend_runtime_requirements_equal_the_audited_production_pins(self):
