@@ -333,7 +333,17 @@ class TestDeploymentFiles:
         text = json.dumps(v)
         assert "localhost" not in text and "127.0.0.1" not in text and not re.search(r"(?i)token|secret|password", text)
         assert (BACKEND / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
-        assert "vercel" not in (BACKEND / "pyproject.toml").read_text(encoding="utf-8")        # one place declares the entrypoint: vercel.json
+        assert 'entrypoint = "app.main:app"' in (BACKEND / "pyproject.toml").read_text(encoding="utf-8")   # same value for a standalone backend project
+
+    def test_the_backend_also_works_when_a_platform_loads_main_py_as_a_bare_file(self):
+        """A standalone Python project on Vercel may load the entrypoint FILE (module name `main`) instead of importing `app.main`."""
+        parts = ["import importlib.util as u, json", f"sp = u.spec_from_file_location('main', {str(BACKEND / 'app' / 'main.py')!r})",
+                 "m = u.module_from_spec(sp); sp.loader.exec_module(m)", "from fastapi.testclient import TestClient",
+                 "print(json.dumps(TestClient(m.app).get('/api/health').json()))"]
+        r = subprocess.run([sys.executable, "-I", "-c", "; ".join(parts)], capture_output=True, text=True, cwd=BACKEND, timeout=120,
+                           env={**{k: v for k, v in os.environ.items() if not k.startswith("ATHAR_")}, "ATHAR_DB": ":memory:"})
+        assert r.returncode == 0, r.stderr[-400:]
+        assert json.loads(r.stdout.strip().splitlines()[-1])["status"] == "ok"
 
     def test_vercel_sees_exactly_one_python_app_and_one_dependency_manifest(self):
         """Why the import once reported several FastAPI apps is unknown (the error text was not available); the repository now

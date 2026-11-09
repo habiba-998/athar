@@ -7,3 +7,8 @@ python_version = "3.12"
 strict = false
 ignore_missing_imports = true
 plugins = ["pydantic.mypy"]
+
+# Vercel (also when the backend is deployed as a standalone project): the ASGI application is the module `app.main`, variable `app`,
+# relative to this directory. Declared the same way in ../vercel.json for the services layout.
+[tool.vercel]
+entrypoint = "app.main:app"

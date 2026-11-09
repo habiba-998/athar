@@ -1,11 +1,19 @@
 """ATHAR FastAPI application: analysis, environment management and simulation over synthetic data."""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+if not __package__:
+    # Some platforms load the entrypoint FILE directly (as a top-level module named "main") instead of importing `app.main`; the
+    # relative imports below would then fail with "no known parent package". Make the package importable and name it.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    __package__ = "app"
+
 import logging
 import os
 import time
 import uuid
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
