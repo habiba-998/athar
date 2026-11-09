@@ -1,0 +1,153 @@
+{
+  "assets": 40,
+  "baseline": {
+    "attack_paths": 71,
+    "evidence_distribution": {
+      "inferred": 44,
+      "observed": 22,
+      "theoretical": 4,
+      "validated": 1
+    },
+    "max_path_score": 80.0,
+    "posture_score": 66.2,
+    "severity_distribution": {
+      "critical": 8,
+      "high": 46,
+      "low": 0,
+      "medium": 17
+    },
+    "validated_paths": 1
+  },
+  "evidence": {
+    "by_evidence": {
+      "inferred": 12,
+      "observed": 45,
+      "theoretical": 2,
+      "validated": 7
+    },
+    "by_validation": {
+      "none": 59,
+      "real_world": 0,
+      "synthetic_exercise": 7
+    },
+    "on_attack_paths": 47,
+    "stale": 5,
+    "total": 66,
+    "undated": 0,
+    "weak_on_paths": 13
+  },
+  "plans": [
+    {
+      "actions": 0,
+      "business_impact_index": 0.0,
+      "disruption": 0.0,
+      "effort": 0,
+      "id": "plan-status-quo",
+      "impact": "none",
+      "pareto": true,
+      "paths_after": 71,
+      "posture_after": 66.2,
+      "reversible": true,
+      "services_interrupted": 0,
+      "strategy": "status_quo"
+    },
+    {
+      "actions": 1,
+      "business_impact_index": 0.0,
+      "disruption": 0.0,
+      "effort": 1,
+      "id": "plan-minimal",
+      "impact": "low",
+      "pareto": true,
+      "paths_after": 25,
+      "posture_after": 51.9,
+      "reversible": false,
+      "services_interrupted": 0,
+      "strategy": "minimal"
+    },
+    {
+      "actions": 2,
+      "business_impact_index": 17.9,
+      "disruption": 1.5,
+      "effort": 2,
+      "id": "plan-reversible",
+      "impact": "medium",
+      "pareto": true,
+      "paths_after": 7,
+      "posture_after": 26.0,
+      "reversible": true,
+      "services_interrupted": 1,
+      "strategy": "reversible"
+    },
+    {
+      "actions": 4,
+      "business_impact_index": 28.6,
+      "disruption": 1.5,
+      "effort": 4,
+      "id": "plan-balanced",
+      "impact": "medium",
+      "pareto": true,
+      "paths_after": 6,
+      "posture_after": 26.0,
+      "reversible": false,
+      "services_interrupted": 2,
+      "strategy": "balanced"
+    },
+    {
+      "actions": 4,
+      "business_impact_index": 28.6,
+      "disruption": 4.5,
+      "effort": 4,
+      "id": "plan-max-reduction",
+      "impact": "high",
+      "pareto": true,
+      "paths_after": 0,
+      "posture_after": 0.0,
+      "reversible": false,
+      "services_interrupted": 2,
+      "strategy": "max_reduction"
+    },
+    {
+      "actions": 3,
+      "business_impact_index": 17.9,
+      "disruption": 5.5,
+      "effort": 3,
+      "id": "plan-min-cut",
+      "impact": "high",
+      "pareto": true,
+      "paths_after": 0,
+      "posture_after": 0.0,
+      "reversible": false,
+      "services_interrupted": 1,
+      "strategy": "min_cut"
+    }
+  ],
+  "recommendations_partial": false,
+  "relationships": 66,
+  "scenario": "meridian-enterprise",
+  "sensitivity": {
+    "highest_path_unchanged_pct": 43.8,
+    "most_influential": [
+      "exposure_bonus",
+      "evidence_observed",
+      "length_penalty"
+    ],
+    "posture": {
+      "baseline": 66.2,
+      "max": 86.7,
+      "min": 57.4
+    },
+    "spread": 0.3,
+    "top_rec_stability": "stable",
+    "top_recommendation_unchanged_pct": 100.0,
+    "trials": 16
+  },
+  "services": 7,
+  "suggested_plan": "plan-minimal",
+  "top_recommendation": {
+    "id": "rec-remove_relationship-a01",
+    "impact": "low",
+    "paths_eliminated": 46,
+    "priority": 2458.5
+  }
+}

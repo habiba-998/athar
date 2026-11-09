@@ -1,0 +1,106 @@
+import { expect, load, openTab, test } from './helpers'
+
+test('dashboard KPIs come from the API analysis', async ({ page, api }) => {
+  const a = await (await api.get('/api/analysis')).json()
+  await load(page)
+  const kpis = page.getByTestId('kpis')
+  await expect(kpis).toContainText(String(a.summary.attack_paths))
+  await expect(kpis).toContainText(String(a.summary.total_assets))
+  await expect(page.getByTestId('attack-graph').first()).toBeVisible()
+  await expect(page.getByTestId('findings')).not.toBeEmpty()
+  // the feed shows the newest events, so assert structure rather than specific start-up entries
+  const items = page.getByTestId('activity').locator('li')
+  await expect(items.first()).toContainText(/\d\d:\d\d:\d\d/)
+  expect(await items.count()).toBeGreaterThan(0)
+  await expect(page.getByTestId('chip-synthetic')).toBeVisible()
+  await expect(page.getByTestId('chip-ai')).toContainText('off')
+})
+
+test('language switch toggles Arabic RTL and back to English LTR', async ({ page }) => {
+  await load(page)
+  const html = page.locator('html')
+  await expect(html).toHaveAttribute('dir', 'ltr')
+  await page.getByTestId('lang-toggle').click()
+  await expect(html).toHaveAttribute('dir', 'rtl')
+  await expect(html).toHaveAttribute('lang', 'ar')
+  await expect(page.getByRole('navigation')).toContainText('لوحة المعلومات')
+  await expect(page.getByTestId('kpis')).toContainText('إجمالي الأصول')
+  await page.getByTestId('lang-toggle').click()
+  await expect(html).toHaveAttribute('dir', 'ltr')
+  await expect(page.getByRole('navigation')).toContainText('Dashboard')
+})
+
+test('demo: simulate removing the excessive permission, see residual risk and impact, then reset', async ({ page, api }) => {
+  const before = await (await api.get('/api/analysis')).json()
+  await load(page)
+  await openTab(page, 'Simulation')
+  await page.getByLabel('Action').selectOption('remove_relationship')
+  await page.getByLabel('Target').selectOption('r03') // Sara can log in to Jump Host (stale admin login)
+  await page.getByRole('button', { name: 'Add to queue' }).click()
+  await expect(page.getByTestId('sim-queue')).toContainText('Jump Host')
+  await page.getByRole('button', { name: 'Run simulation' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Simulation complete' })).toBeVisible()
+  expect(Number(await page.getByTestId('eliminated-count').innerText())).toBeGreaterThan(0)
+  await expect(page.getByTestId('residual')).toContainText('Customer Database')
+  await expect(page.getByTestId('comparison')).toBeVisible()
+  expect(await (await api.get('/api/analysis')).json()).toEqual(before) // baseline untouched
+  await page.getByRole('button', { name: 'Reset', exact: true }).click()
+  await expect(page.getByTestId('comparison')).toHaveCount(0)
+  await expect(page.getByText('No changes queued.')).toBeVisible()
+})
+
+test('recommendation can be simulated and explained', async ({ page }) => {
+  await load(page)
+  await openTab(page, 'Recommendations')
+  const first = page.getByTestId('recommendations').locator('li').first()
+  await expect(first).toContainText('Requires human approval')
+  await first.getByRole('button', { name: 'Explain' }).click()
+  await expect(page.getByTestId('rec-explanation').first()).toContainText('human approval')
+  await first.getByRole('button', { name: 'Simulate this' }).click()
+  await expect(page.getByTestId('sim-queue').locator('li')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Run simulation' }).click()
+  await expect(page.getByTestId('comparison')).toBeVisible()
+})
+
+test('graph: path highlight, details and explanation keep AI separate and labelled', async ({ page }) => {
+  await load(page)
+  await openTab(page, 'Attack graph')
+  await page.getByRole('list', { name: 'Attack paths' }).locator('button').first().click()
+  await expect(page.getByTestId('path-detail')).toContainText('Relationship sequence')
+  await page.getByRole('button', { name: 'Explain this path' }).click()
+  const ex = page.getByTestId('explanation')
+  await expect(ex).toContainText('Evidence (deterministic)')
+  await expect(page.getByTestId('ai-section')).toContainText('AI-generated narration (not evidence)')
+  await expect(page.getByTestId('ai-fallback')).toContainText('AI narration is off')
+  await expect(page.getByTestId('ai-text')).toHaveCount(0)
+  await page.locator('.react-flow__node', { hasText: 'Customer Database' }).click()
+  await expect(page.getByTestId('selection-detail')).toContainText('Incoming access')
+})
+
+test('incomplete results are announced: truncated paths and partial recommendations are never presented as complete', async ({ page, api }) => {
+  await load(page)
+  await expect(page.getByTestId('truncated-warning')).toHaveCount(0)            // the sample is complete
+  await openTab(page, 'Recommendations')
+  await expect(page.getByTestId('partial-warning')).toHaveCount(0)
+
+  await page.route('**/api/analysis', async (route) => {
+    const body = await (await route.fetch()).json()
+    await route.fulfill({ json: { ...body, summary: { ...body.summary, paths_truncated: true } } })
+  })
+  await page.reload()
+  await expect(page.getByTestId('truncated-warning')).toContainText('incomplete')
+  await openTab(page, 'Recommendations')
+  await expect(page.getByTestId('partial-warning')).toContainText('incomplete')
+  await page.getByTestId('lang-toggle').click()
+  await expect(page.getByTestId('partial-warning')).toContainText('غير مكتملة')
+  expect((await (await api.get('/api/analysis')).json()).summary.paths_truncated).toBe(false)
+})
+
+test('shows an error state with retry when the API is unreachable', async ({ page }) => {
+  await page.route('**/api/environment', (r) => r.abort())
+  await page.goto('/')
+  await expect(page.getByRole('alert')).toContainText('Could not reach the ATHAR API')
+  await page.unroute('**/api/environment')
+  await page.getByRole('button', { name: 'Retry' }).click()
+  await expect(page.getByTestId('kpis')).toBeVisible()
+})

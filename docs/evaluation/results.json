@@ -1,0 +1,573 @@
+{
+  "max_steps": 8,
+  "random_seed": 20261109,
+  "random_trials": 500,
+  "scenarios": {
+    "acme-sample": {
+      "assets": 16,
+      "baseline": {
+        "attack_paths": 20,
+        "classes": {
+          "inferred": 12,
+          "theoretical": 3,
+          "validated": 5
+        },
+        "compromised_sources": [
+          "emp-sara"
+        ],
+        "max_path_score": 77.1,
+        "posture_score": 54.8,
+        "relationships_on_attack_paths": 15,
+        "severity_distribution": {
+          "critical": 4,
+          "high": 12,
+          "low": 0,
+          "medium": 4
+        },
+        "total_path_score": 1175.4,
+        "validated_paths": 5,
+        "worst_by_target": {
+          "app-server": 66.9,
+          "backup-server": 72.7,
+          "db-customers": 77.1,
+          "db-hr": 0.0,
+          "s3-archive": 59.1,
+          "secrets-vault": 53.2
+        }
+      },
+      "comparison": [
+        {
+          "athar": {
+            "business_critical": 0,
+            "lost_access": 0,
+            "posture": 51.3,
+            "remaining": 11
+          },
+          "k": 1,
+          "optimal": {
+            "business_critical": 0,
+            "combinations_checked": 15,
+            "lost_access": 0,
+            "posture": 51.3,
+            "remaining": 11
+          },
+          "random": {
+            "lost_access_mean": 0.83,
+            "remaining_max": 17,
+            "remaining_mean": 15.0,
+            "remaining_median": 15.0,
+            "remaining_min": 11
+          },
+          "static_frequency": {
+            "business_critical": 0,
+            "lost_access": 0,
+            "posture": 51.3,
+            "remaining": 11
+          }
+        },
+        {
+          "athar": {
+            "business_critical": 0,
+            "lost_access": 0,
+            "posture": 51.3,
+            "remaining": 6
+          },
+          "k": 2,
+          "optimal": {
+            "business_critical": 1,
+            "combinations_checked": 105,
+            "lost_access": 0,
+            "posture": 34.3,
+            "remaining": 5
+          },
+          "random": {
+            "lost_access_mean": 1.5,
+            "remaining_max": 17,
+            "remaining_mean": 11.3,
+            "remaining_median": 12.0,
+            "remaining_min": 5
+          },
+          "static_frequency": {
+            "business_critical": 0,
+            "lost_access": 3,
+            "posture": 32.9,
+            "remaining": 6
+          }
+        },
+        {
+          "athar": {
+            "business_critical": 1,
+            "lost_access": 0,
+            "posture": 0.0,
+            "remaining": 0
+          },
+          "k": 3,
+          "optimal": {
+            "business_critical": 1,
+            "combinations_checked": 455,
+            "lost_access": 0,
+            "posture": 0.0,
+            "remaining": 0
+          },
+          "random": {
+            "lost_access_mean": 1.76,
+            "remaining_max": 15,
+            "remaining_mean": 8.2,
+            "remaining_median": 8.0,
+            "remaining_min": 0
+          },
+          "static_frequency": {
+            "business_critical": 1,
+            "lost_access": 3,
+            "posture": 26.6,
+            "remaining": 3
+          }
+        }
+      ],
+      "greedy_all_actions": [
+        {
+          "action": "remove_relationship r03: Sara (Employee) -[can_login]-> Jump Host",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 11,
+          "posture": 51.3,
+          "step": 1,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 630.8,
+          "validated": 2
+        },
+        {
+          "action": "remove_relationship r05: File Server -[has_credentials]-> Deploy Service Account",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 6,
+          "posture": 51.3,
+          "step": 2,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 372.6,
+          "validated": 2
+        },
+        {
+          "action": "disable_relationship r01: Sara (Employee) -[can_login]-> Customer Web Portal",
+          "cum_business_critical_touched": 1,
+          "cum_lost_access_pairs": 0,
+          "kind": "disable_relationship",
+          "paths": 0,
+          "posture": 0.0,
+          "step": 3,
+          "step_impact": "high",
+          "step_reversible": true,
+          "total_score": 0,
+          "validated": 0
+        }
+      ],
+      "greedy_business_safe": [
+        {
+          "action": "remove_relationship r03: Sara (Employee) -[can_login]-> Jump Host",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 11,
+          "posture": 51.3,
+          "step": 1,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 630.8,
+          "validated": 2
+        },
+        {
+          "action": "remove_relationship r05: File Server -[has_credentials]-> Deploy Service Account",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 6,
+          "posture": 51.3,
+          "step": 2,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 372.6,
+          "validated": 2
+        },
+        {
+          "action": "remove_relationship r11: Application Server -[trusts]-> Backup Server",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 3,
+          "kind": "remove_relationship",
+          "paths": 3,
+          "posture": 32.9,
+          "step": 3,
+          "step_impact": "medium",
+          "step_reversible": false,
+          "total_score": 197.2,
+          "validated": 2
+        },
+        {
+          "action": "apply_mfa: Customer Web Portal",
+          "cum_business_critical_touched": 1,
+          "cum_lost_access_pairs": 3,
+          "kind": "apply_mfa",
+          "paths": 3,
+          "posture": 21.9,
+          "step": 4,
+          "step_impact": "medium",
+          "step_reversible": true,
+          "total_score": 131.4,
+          "validated": 2
+        }
+      ],
+      "greedy_remove_only": [
+        {
+          "action": "remove_relationship r03: Sara (Employee) -[can_login]-> Jump Host",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 11,
+          "posture": 51.3,
+          "step": 1,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 630.8,
+          "validated": 2
+        },
+        {
+          "action": "remove_relationship r05: File Server -[has_credentials]-> Deploy Service Account",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 6,
+          "posture": 51.3,
+          "step": 2,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 372.6,
+          "validated": 2
+        },
+        {
+          "action": "remove_relationship r01: Sara (Employee) -[can_login]-> Customer Web Portal",
+          "cum_business_critical_touched": 1,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 0,
+          "posture": 0.0,
+          "step": 3,
+          "step_impact": "high",
+          "step_reversible": false,
+          "total_score": 0,
+          "validated": 0
+        }
+      ],
+      "min_cut": 3,
+      "relationships": 20,
+      "residual_after_all_actions": [],
+      "residual_business_safe": [
+        {
+          "evidence": "validated",
+          "route": "Sara (Employee) > Customer Web Portal > Application Server > Customer Database",
+          "score": 54.3,
+          "severity": "high"
+        },
+        {
+          "evidence": "validated",
+          "route": "Sara (Employee) > Customer Web Portal > Application Server",
+          "score": 39.6,
+          "severity": "medium"
+        },
+        {
+          "evidence": "theoretical",
+          "route": "Sara (Employee) > Customer Web Portal > Application Server > Secrets Vault",
+          "score": 37.5,
+          "severity": "medium"
+        }
+      ],
+      "title": "Acme Synthetic Corp (sample, 15 assets)"
+    },
+    "harbor-logistics": {
+      "assets": 34,
+      "baseline": {
+        "attack_paths": 42,
+        "classes": {
+          "inferred": 23,
+          "theoretical": 7,
+          "validated": 12
+        },
+        "compromised_sources": [
+          "u-lina",
+          "web-ext"
+        ],
+        "max_path_score": 88.0,
+        "posture_score": 67.3,
+        "relationships_on_attack_paths": 33,
+        "severity_distribution": {
+          "critical": 5,
+          "high": 25,
+          "low": 0,
+          "medium": 12
+        },
+        "total_path_score": 2399.4,
+        "validated_paths": 12,
+        "worst_by_target": {
+          "api-orders": 88.0,
+          "backup-srv": 66.7,
+          "ci-runner": 59.2,
+          "db-customers": 72.3,
+          "db-ledger": 66.5,
+          "db-orders": 73.8,
+          "db-payroll": 66.5,
+          "dc-01": 74.0,
+          "jump-host": 72.7,
+          "role-cloud-admin": 61.9,
+          "s3-backups": 55.3,
+          "s3-datalake": 61.7,
+          "vault": 55.8
+        }
+      },
+      "comparison": [
+        {
+          "athar": {
+            "business_critical": 0,
+            "lost_access": 0,
+            "posture": 22.8,
+            "remaining": 5
+          },
+          "k": 1,
+          "optimal": {
+            "business_critical": 0,
+            "combinations_checked": 33,
+            "lost_access": 0,
+            "posture": 22.8,
+            "remaining": 5
+          },
+          "random": {
+            "lost_access_mean": 2.18,
+            "remaining_max": 41,
+            "remaining_mean": 36.0,
+            "remaining_median": 39.0,
+            "remaining_min": 5
+          },
+          "static_frequency": {
+            "business_critical": 0,
+            "lost_access": 0,
+            "posture": 22.8,
+            "remaining": 5
+          }
+        },
+        {
+          "athar": {
+            "business_critical": 1,
+            "lost_access": 0,
+            "posture": 4.1,
+            "remaining": 1
+          },
+          "k": 2,
+          "optimal": {
+            "business_critical": 1,
+            "combinations_checked": 528,
+            "lost_access": 0,
+            "posture": 4.1,
+            "remaining": 1
+          },
+          "random": {
+            "lost_access_mean": 3.54,
+            "remaining_max": 40,
+            "remaining_mean": 30.4,
+            "remaining_median": 35.0,
+            "remaining_min": 1
+          },
+          "static_frequency": {
+            "business_critical": 0,
+            "lost_access": 0,
+            "posture": 22.8,
+            "remaining": 5
+          }
+        },
+        {
+          "athar": {
+            "business_critical": 1,
+            "lost_access": 0,
+            "posture": 0.0,
+            "remaining": 0
+          },
+          "k": 3,
+          "optimal": {
+            "business_critical": 1,
+            "combinations_checked": 5456,
+            "lost_access": 0,
+            "posture": 0.0,
+            "remaining": 0
+          },
+          "random": {
+            "lost_access_mean": 4.84,
+            "remaining_max": 40,
+            "remaining_mean": 27.3,
+            "remaining_median": 31.0,
+            "remaining_min": 1
+          },
+          "static_frequency": {
+            "business_critical": 1,
+            "lost_access": 3,
+            "posture": 22.8,
+            "remaining": 5
+          }
+        }
+      ],
+      "greedy_all_actions": [
+        {
+          "action": "remove_relationship r02: Helpdesk group -[can_login]-> Admin jump host",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 5,
+          "posture": 22.8,
+          "step": 1,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 349.7,
+          "validated": 2
+        },
+        {
+          "action": "disable_relationship r09: Customer web portal -[network_access]-> Orders API server",
+          "cum_business_critical_touched": 1,
+          "cum_lost_access_pairs": 0,
+          "kind": "disable_relationship",
+          "paths": 1,
+          "posture": 4.1,
+          "step": 2,
+          "step_impact": "high",
+          "step_reversible": true,
+          "total_score": 53.9,
+          "validated": 0
+        },
+        {
+          "action": "remove_relationship r10: Customer web portal -[read_access]-> Customer PII database",
+          "cum_business_critical_touched": 1,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 0,
+          "posture": 0.0,
+          "step": 3,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 0,
+          "validated": 0
+        }
+      ],
+      "greedy_business_safe": [
+        {
+          "action": "remove_relationship r02: Helpdesk group -[can_login]-> Admin jump host",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 5,
+          "posture": 22.8,
+          "step": 1,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 349.7,
+          "validated": 2
+        },
+        {
+          "action": "remove_relationship r10: Customer web portal -[read_access]-> Customer PII database",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 4,
+          "posture": 22.8,
+          "step": 2,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 295.8,
+          "validated": 2
+        },
+        {
+          "action": "remove_relationship r12: Orders API server -[has_credentials]-> Orders app service account",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 4,
+          "kind": "remove_relationship",
+          "paths": 3,
+          "posture": 17.2,
+          "step": 3,
+          "step_impact": "medium",
+          "step_reversible": false,
+          "total_score": 223.5,
+          "validated": 2
+        },
+        {
+          "action": "disable_relationship r14: Orders API server -[trusts]-> Batch processing server",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 6,
+          "kind": "disable_relationship",
+          "paths": 2,
+          "posture": 12.4,
+          "step": 4,
+          "step_impact": "medium",
+          "step_reversible": true,
+          "total_score": 161.8,
+          "validated": 2
+        }
+      ],
+      "greedy_remove_only": [
+        {
+          "action": "remove_relationship r02: Helpdesk group -[can_login]-> Admin jump host",
+          "cum_business_critical_touched": 0,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 5,
+          "posture": 22.8,
+          "step": 1,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 349.7,
+          "validated": 2
+        },
+        {
+          "action": "remove_relationship r09: Customer web portal -[network_access]-> Orders API server",
+          "cum_business_critical_touched": 1,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 1,
+          "posture": 4.1,
+          "step": 2,
+          "step_impact": "high",
+          "step_reversible": false,
+          "total_score": 53.9,
+          "validated": 0
+        },
+        {
+          "action": "remove_relationship r10: Customer web portal -[read_access]-> Customer PII database",
+          "cum_business_critical_touched": 1,
+          "cum_lost_access_pairs": 0,
+          "kind": "remove_relationship",
+          "paths": 0,
+          "posture": 0.0,
+          "step": 3,
+          "step_impact": "low",
+          "step_reversible": false,
+          "total_score": 0,
+          "validated": 0
+        }
+      ],
+      "min_cut": 3,
+      "relationships": 55,
+      "residual_after_all_actions": [],
+      "residual_business_safe": [
+        {
+          "evidence": "validated",
+          "route": "Customer web portal > Orders API server",
+          "score": 88.0,
+          "severity": "critical"
+        },
+        {
+          "evidence": "validated",
+          "route": "Customer web portal > Orders API server > Orders database",
+          "score": 73.8,
+          "severity": "critical"
+        }
+      ],
+      "title": "Harbor Synthetic Logistics (34 assets)"
+    }
+  }
+}

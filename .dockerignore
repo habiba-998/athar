@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/test-results
+**/playwright-report
+backend/data
+backend/tests
+.env
+.env.*
+!.env.example
+docs/screenshots

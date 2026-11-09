@@ -1,0 +1,169 @@
+@import 'tailwindcss';
+
+/*
+  ATHAR design tokens.
+  Surfaces are deep navy stepping up toward the viewer; teal is the only brand accent.
+  Red / amber / gold / green are reserved for security severity and impact (never decoration).
+  The -fg variants are lighter tints used for TEXT on tinted backgrounds to keep WCAG AA contrast.
+*/
+@theme {
+  --color-abyss: #060a14;
+  --color-surface: #0b1322;
+  --color-raised: #111c31;
+  --color-lift: #182642;
+  --color-hairline: #1f2d47;
+  --color-hairline-2: #2c3f62;
+
+  --color-cloud: #e8eef9;
+  --color-mist: #a3b4d0;
+  --color-faint: #8497b8;
+
+  --color-teal: #34d1bf;
+  --color-teal-ink: #04211e;
+
+  --color-crit: #ef5b6b;
+  --color-high: #f2a03d;
+  --color-med: #e6c14a;
+  --color-low: #4cc38a;
+  --color-crit-fg: #ff8d98;
+  --color-high-fg: #f8b86c;
+  --color-med-fg: #efcd64;
+  --color-low-fg: #72d6a4;
+
+  --font-sans: 'IBM Plex Sans', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+html,
+body,
+#root {
+  min-height: 100%;
+}
+body {
+  background: var(--color-abyss);
+  color: var(--color-cloud);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+/* Arabic: its own typeface, taller line height, and never any letter-spacing (it breaks letter joining). */
+html[lang='ar'] body {
+  font-family: 'IBM Plex Sans Arabic', 'IBM Plex Sans', system-ui, sans-serif;
+  line-height: 1.75;
+  letter-spacing: 0;
+}
+/* Tailwind's text-* utilities set their own (Latin-tuned) line heights through these variables; give Arabic more room. */
+html[lang='ar'] {
+  --text-xs--line-height: 1.8;
+  --text-sm--line-height: 1.8;
+  --text-base--line-height: 1.8;
+  --text-lg--line-height: 1.7;
+  --text-xl--line-height: 1.6;
+  --text-2xl--line-height: 1.5;
+  --text-3xl--line-height: 1.4;
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Motion: short, purposeful, and fully disabled for users who ask for less. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.rise {
+  animation: rise 0.22s ease-out both;
+}
+@keyframes grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.grow {
+  transform-origin: left center;
+  animation: grow 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+[dir='rtl'] .grow {
+  transform-origin: right center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .grow {
+    animation: none;
+  }
+  * {
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Native dialog */
+dialog {
+  background: var(--color-surface);
+  color: var(--color-cloud);
+  border: 1px solid var(--color-hairline-2);
+  border-radius: 10px;
+  padding: 0;
+  margin: auto;
+  width: min(36rem, calc(100vw - 1.5rem));
+  max-height: calc(100dvh - 2rem);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.55);
+}
+dialog::backdrop {
+  background: rgb(3 6 12 / 0.74);
+}
+
+/* React Flow, themed to match */
+.react-flow__node {
+  font-family: inherit;
+}
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--color-hairline-2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.react-flow__controls-button {
+  width: 34px;
+  height: 34px;
+  background: var(--color-raised);
+  border-bottom: 1px solid var(--color-hairline-2);
+  color: var(--color-cloud);
+  fill: var(--color-cloud);
+}
+.react-flow__controls-button:hover {
+  background: var(--color-lift);
+}
+.react-flow__controls-button:last-child {
+  border-bottom: 0;
+}
+.react-flow__attribution {
+  background: transparent;
+  color: var(--color-faint);
+}
+.react-flow__attribution a {
+  color: var(--color-faint);
+}
+.react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+}
+.react-flow__edge-textbg {
+  fill: var(--color-abyss);
+}
+@media (pointer: coarse), (max-width: 640px) {
+  .react-flow__controls-button {
+    width: 44px;
+    height: 44px;
+  }
+}
