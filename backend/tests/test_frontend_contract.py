@@ -30,9 +30,9 @@ def route_matches(method: str, path: str) -> bool:
     for r in app.routes:
         rp = getattr(r, "path", "")
         methods = getattr(r, "methods", None) or set()
-        pattern = "^" + re.sub(r"\{[^}]+\}", "[^/]+", rp.replace("{full_path:path}", ".*")) + "$"
-        if method not in methods:
-            continue
+        if not rp.startswith("/api/") or method not in methods:
+            continue          # the static catch-all (/{full_path:path}) must never count as serving an API call
+        pattern = "^" + re.sub(r"\{[^}]+\}", "[^/]+", rp) + "$"
         if path.endswith("/"):                      # the frontend wrote `/api/x/${id}...`: compare on the static prefix, then a parameter
             if rp.startswith(path) and rp[len(path):].startswith("{"):
                 return True
