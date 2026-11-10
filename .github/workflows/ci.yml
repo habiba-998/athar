@@ -214,7 +214,7 @@ jobs:
         if: always()
         with: { name: space-report, path: space-report.json, if-no-files-found: ignore }
 
-  # GitHub Pages (no extra account): enabled by this job itself (configure-pages, enablement) unless the repository variable DISABLE_PAGES is "true". The static site uses relative URLs, so the /<repo>/ sub-path works. Pages cannot set
+  # GitHub Pages (no extra account): published by this job once Pages is enabled (Source: GitHub Actions) unless the repository variable DISABLE_PAGES is "true". The static site uses relative URLs, so the /<repo>/ sub-path works. Pages cannot set
   # response headers, so the CSP/HSTS of the Netlify deployment are NOT available there.
   pages:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DISABLE_PAGES != 'true'
@@ -223,16 +223,24 @@ jobs:
     permissions: { pages: write, id-token: write }
     environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
     steps:
-      - uses: actions/configure-pages@v5
-        with: { enablement: true }
-      - uses: actions/download-artifact@v4
+      # The workflow token cannot create the Pages site (GitHub answers "Resource not accessible by integration"). Until the owner
+      # sets Settings > Pages > Source = "GitHub Actions" once, this step fails and the remaining steps are skipped; CI stays green.
+      - id: cfg
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+      - if: steps.cfg.outcome == 'success'
+        uses: actions/download-artifact@v4
         with: { name: dist-static, path: site }
-      - run: rm -f site/_headers
-      - uses: actions/upload-pages-artifact@v3
+      - if: steps.cfg.outcome == 'success'
+        run: rm -f site/_headers
+      - if: steps.cfg.outcome == 'success'
+        uses: actions/upload-pages-artifact@v3
         with: { path: site }
       - id: deploy
+        if: steps.cfg.outcome == 'success'
         uses: actions/deploy-pages@v4
       - name: Check the published site from outside (index, WebAssembly runtime, backend source)
+        if: steps.cfg.outcome == 'success'
         run: |
           u="${{ steps.deploy.outputs.page_url }}"
           for i in $(seq 1 20); do curl -fsS -o /dev/null "$u" && break; sleep 6; done
