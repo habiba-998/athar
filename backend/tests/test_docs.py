@@ -90,15 +90,16 @@ def test_claims_register_states_the_hard_limits():
 import re  # noqa: E402
 
 
-def test_deployment_doc_exists_and_never_claims_a_live_url():
+def test_deployment_doc_names_only_the_one_verified_address():
     text = read("DEPLOYMENT")
-    assert len(text) > 800 and "not deployed" in text.lower()
-    assert "REPLACE_WITH_YOUR_API_ORIGIN" in text                       # placeholders, never a guessed URL
-    urls = re.findall(r"https://[A-Za-z0-9.\-<>]+\.[a-z]{2,}", text)
-    # no concrete deployment address may appear: placeholders (<project>) and documentation sites only
-    assert not [u for u in urls if u.endswith((".vercel.app", ".onrender.com", ".fly.dev", ".up.railway.app")) and not u.startswith("https://<")], urls
+    assert len(text) > 800 and "REPLACE_WITH_YOUR_API_ORIGIN" in text    # placeholders, never a guessed URL
+    urls = set(re.findall(r"https://[A-Za-z0-9.\-<>]+\.[a-z]{2,}", text))
+    # the only concrete deployment address is the Netlify site that was verified from outside; other hosts appear only as placeholders
+    concrete = {u for u in urls if u.endswith((".vercel.app", ".onrender.com", ".fly.dev", ".up.railway.app", ".netlify.app", ".github.io", ".hf.space")) and not u.startswith("https://<")}
+    assert concrete <= {"https://athaars.netlify.app"}, concrete
+    assert "15 passed, 0 failed" in text and "2026-11-10" in text         # the claim is tied to a recorded verification
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "Deployment status: not deployed" in readme
+    assert "Deployment status: live at https://athaars.netlify.app" in readme and "Chromium only" in readme
 
 
 def test_every_environment_variable_the_code_reads_is_documented_in_the_architecture_reference():

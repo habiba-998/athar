@@ -49,7 +49,7 @@ python -m uvicorn app.main:app --port 8200      # serves API and the built app o
 
 `ATHAR_MODE=demo` is the **public read-only mode**: visitors can read and run stateless simulations; every write needs the admin token. See [Deployment](docs/DEPLOYMENT.md).
 
-> **Deployment status: not deployed.** No public URL exists. Selected: a **static build on Netlify** in which the unchanged Python backend runs inside the visitor's browser (Pyodide / WebAssembly), so no server is needed. It is built and tested locally (browser suite, strict CSP, zero requests to any other origin); publishing needs your Netlify account: exact steps in [Deployment](docs/DEPLOYMENT.md). Also prepared: a Hugging Face Docker Space (real server) and a Vercel attempt that is unresolved. Do not quote any URL that has not passed the verifier from outside.
+> **Deployment status: live at https://athaars.netlify.app** (Netlify, static build; the unchanged Python backend runs inside the visitor's browser via Pyodide / WebAssembly, so there is no server). Checked from outside on 2026-11-10: `scripts/verify_deployment.py --static` 15 passed, 0 failed; the browser suite against the live site passes 4 of 5 tests, the fifth fails only on a console message from a script Netlify injects (blocked by the site's CSP). It is the read-only public demo on synthetic data; first load downloads about 16 MB. Chromium only has been tested. See [Deployment](docs/DEPLOYMENT.md).
 
 ## Configuration
 

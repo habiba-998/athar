@@ -2,7 +2,7 @@
 
 ## Status (read this first)
 
-**ATHAR is not deployed to a public URL.** Publishing needs a source-code host account, a hosting account and a person to authorise the connection. None of that can be done from the build environment (no credentials; no `gh`, hosting CLI or Docker on the development machine), and creating accounts or signing in is deliberately left to the owner. Nothing in this repository claims a live address. **No URL may be written into slides, the README or this file until `scripts/verify_deployment.py` has passed against it from outside.**
+**ATHAR is live at https://athaars.netlify.app** (Netlify, free plan, static build with the Python backend running in the browser). The owner connected the repository to Netlify; the address was then checked from outside on 2026-11-10: `python scripts/verify_deployment.py https://athaars.netlify.app --static` gave **15 passed, 0 failed**; the browser suite (`playwright.external.config.ts`) passes 4 of 5 tests, and the fifth fails only on a console error that comes from a script Netlify injects into the page (`/.netlify/scripts/hud`), which the strict CSP blocks. The application is unaffected. Not verified: Safari, Firefox, a real phone. No other deployment (Vercel, Hugging Face, GitHub Pages) is live; the sections below for those hosts are alternatives.
 
 What *is* done and verified:
 
@@ -67,7 +67,7 @@ Sources: [Vercel function limits](https://vercel.com/docs/functions/limitations)
    The first checks the headers, the self-hosted runtime and the bundle; the second really starts the engine in a browser and runs the dashboard, recommendations, plans, simulation and sensitivity against the live site. Then open it on your phone over mobile data.
 6. Send me the address. I will write it into the README only after both pass.
 
-**No new account at all: GitHub Pages.** The same static build can be published from this repository with no extra service: *Settings > Pages > Source: GitHub Actions*, (GitHub does not let the workflow token create the Pages site, so enable it once by hand; until then the `pages` job skips its steps); the `pages` job publishes `https://habiba-998.github.io/athar/` after the gate. Pages cannot set response headers, so the CSP/HSTS of the Netlify deployment are **not** available there (the page still works: a relative-URL build).
+**No new account at all: GitHub Pages.** The same static build can be published from this repository with no extra service: *Settings > Pages > Source: GitHub Actions*, (GitHub does not let the workflow token create the Pages site, so enable it once by hand; until then the `pages` job skips its steps); the `pages` job publishes `https://<owner>.github.io/athar/` after the gate. Pages cannot set response headers, so the CSP/HSTS of the Netlify deployment are **not** available there (the page still works: a relative-URL build).
 
 **Known limits (honest).** Needs a browser with WebAssembly and module workers (verified: Chromium only; Safari 15+/Firefox 114+ are expected to work, not tested). Pyodide ships its own library versions (Python 3.14, pydantic 2.12.5, FastAPI 0.136.1, Starlette 1.0.0) which differ from the server lock (Python 3.12, pydantic 2.14.3, FastAPI 0.162.2); the bridge parity tests run under CPython and the browser tests run the real WebAssembly build, but the full 1,000-test backend suite does not run inside WebAssembly. The wheels are downloaded at build time from the official Pyodide distribution of the pinned version and **checked against its sha256 lock** before use.
 
