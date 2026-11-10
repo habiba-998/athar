@@ -12,6 +12,7 @@ if not __package__:
 
 import logging
 import os
+import re
 import time
 import uuid
 from typing import Any
@@ -63,10 +64,19 @@ def _origins() -> list[str]:
     return [o.strip() for o in raw.split(",") if o.strip().startswith(("http://", "https://")) and "*" not in o]
 
 
+def _frame_ancestors() -> str:
+    """Who may embed the app in a frame. Default: nobody. ATHAR_FRAME_ANCESTORS (space separated) allows https origins only; a leading
+    `*.` subdomain wildcard is accepted, a bare `*` or any non-https value is dropped. Needed on Hugging Face, whose Space page shows the
+    app inside an iframe."""
+    ok = [o for o in os.environ.get("ATHAR_FRAME_ANCESTORS", "").split()
+          if re.fullmatch(r"https://(\*\.)?[A-Za-z0-9.-]+(:\d+)?", o) and o != "https://*"]
+    return " ".join(ok) if ok else "'none'"
+
+
 def _csp() -> str:
     extra = " ".join(o for o in os.environ.get("ATHAR_CSP_CONNECT", "").split() if o.startswith("https://") and "*" not in o)
     return ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; "
-            f"connect-src 'self' {extra}".rstrip() + "; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+            f"connect-src 'self' {extra}".rstrip() + f"; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors {_frame_ancestors()}")
 
 
 CSP = _csp()
@@ -91,7 +101,8 @@ async def guard_and_headers(request: Request, call_next):
     h = resp.headers
     h["X-Content-Type-Options"] = "nosniff"
     h["Referrer-Policy"] = "no-referrer"
-    h["X-Frame-Options"] = "DENY"
+    if _frame_ancestors() == "'none'":
+        h["X-Frame-Options"] = "DENY"           # (when embedding is allowed, only the CSP frame-ancestors list applies)
     h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
     h["Cross-Origin-Opener-Policy"] = "same-origin"
     h["Cross-Origin-Resource-Policy"] = "same-site"

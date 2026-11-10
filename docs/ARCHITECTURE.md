@@ -140,6 +140,7 @@ Errors: `422` validation (list of `{loc, msg}`), `403 read_only_demo | invalid_a
 | `ATHAR_TRUST_PROXY` | `0` | `1` only behind exactly one trusted proxy: use the right-most `X-Forwarded-For` entry and `X-Forwarded-Proto`. |
 | `ATHAR_HSTS` | `0` | `1` forces the `Strict-Transport-Security` header. |
 | `ATHAR_FORCE_HTTPS` | `0` | `1` (with `ATHAR_TRUST_PROXY=1`): redirect requests the proxy reports as plain http to https (308). Probes `/api/health` and `/api/ready` are exempt. |
+| `ATHAR_FRAME_ANCESTORS` | empty (nobody) | Space separated https origins that may embed the app (CSP `frame-ancestors`; `X-Frame-Options` is then omitted). A bare `*`, `http://` and malformed values are ignored. Used by the Hugging Face Space. |
 | `ATHAR_STATIC_DIR` | `frontend/dist` if present | Directory of the built single-page app to serve. |
 | `ATHAR_DB` | `backend/data/athar.db` | SQLite file (`:memory:` allowed). |
 | `ATHAR_DOCS` | `0` | `1` re-enables `/docs` and `/openapi.json` in demo mode (always on in local mode). |

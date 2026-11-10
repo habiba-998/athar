@@ -124,9 +124,13 @@ def main() -> int:
     page = request(f"{base}/")
     html = page.text
     rep.check("single-page app is served", page.status == 200 and 'id="root"' in html, f"HTTP {page.status}")
-    for hname, want in (("content-security-policy", "default-src 'self'"), ("x-content-type-options", "nosniff"), ("x-frame-options", "DENY"),
-                        ("referrer-policy", "no-referrer")):
+    for hname, want in (("content-security-policy", "default-src 'self'"), ("x-content-type-options", "nosniff"), ("referrer-policy", "no-referrer")):
         rep.check(f"page header {hname}", want in page.headers.get(hname, ""))
+    # clickjacking: either X-Frame-Options DENY, or a CSP frame-ancestors list that is not a wildcard (a host may allow its own embedding page)
+    csp = page.headers.get("content-security-policy", "")
+    fa = re.search(r"frame-ancestors ([^;]+)", csp)
+    rep.check("page cannot be framed by arbitrary sites", page.headers.get("x-frame-options", "") == "DENY" or bool(fa and "*" not in fa.group(1).replace("https://*.", "")),
+              fa.group(1) if fa else "no frame-ancestors")
     if u.scheme == "https":
         rep.check("page header strict-transport-security", "max-age=" in page.headers.get("strict-transport-security", ""))
     api = request(f"{base}/api/analysis")

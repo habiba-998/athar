@@ -111,6 +111,15 @@ jobs:
           test "$(docker exec athar id -u)" != "0"        # not root
           python3 scripts/verify_deployment.py http://127.0.0.1:8000 --allow-insecure-local
           docker rm -f athar
+      - name: Assemble the Hugging Face Space, build ITS Dockerfile, run it and verify it from the outside
+        run: |
+          python3 scripts/make_hf_space.py --out build/hf-space
+          docker build -t athar-space:ci build/hf-space
+          docker run -d --name athar-space -p 7860:7860 athar-space:ci
+          for i in $(seq 1 40); do curl -fs http://127.0.0.1:7860/api/ready && break; sleep 2; done
+          test "$(docker exec athar-space id -u)" = "1000"       # Spaces run the container as user 1000
+          python3 scripts/verify_deployment.py http://127.0.0.1:7860 --allow-insecure-local
+          docker rm -f athar-space
 
   # The release gate: this job is the ONLY dependency of deploy, and it lists every check that must be green.
   gate:
@@ -145,3 +154,43 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: deployment-report, path: deployment-report.json, if-no-files-found: ignore }
+
+  # Hugging Face Space: pushed only after the gate, only on main, and only when the owner has added the repository secret HF_TOKEN
+  # (a Hugging Face access token with write permission) and the variable HF_SPACE (<user>/<space>). The Space repository is a
+  # derived build context, so the push is forced; the source of truth stays on GitHub.
+  deploy-space:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [gate]
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble the Space
+        run: python3 scripts/make_hf_space.py --out build/hf-space
+      - name: Push to the Space
+        env: { HF_TOKEN: "${{ secrets.HF_TOKEN }}", HF_SPACE: "${{ vars.HF_SPACE }}" }
+        run: |
+          if [ -z "$HF_TOKEN" ] || [ -z "$HF_SPACE" ]; then
+            echo "::warning::HF_TOKEN secret or HF_SPACE variable is not set; nothing was pushed. See docs/DEPLOYMENT.md."
+            exit 0
+          fi
+          cd build/hf-space
+          git init -q -b main
+          git config user.name "ATHAR CI"; git config user.email "ci@users.noreply.github.com"
+          git add -A
+          git commit -q -m "ATHAR ${GITHUB_SHA}"
+          git push --force "https://${HF_SPACE%%/*}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" main
+          echo "pushed to the Space; the build starts on Hugging Face"
+      - name: Verify the public Space from outside (retries while it builds and starts)
+        env: { SPACE_URL: "${{ vars.SPACE_URL }}" }
+        run: |
+          if [ -z "$SPACE_URL" ]; then echo "::warning::SPACE_URL variable not set; skipping external verification"; exit 0; fi
+          for i in $(seq 1 20); do
+            if python3 scripts/verify_deployment.py "$SPACE_URL" --json space-report.json; then exit 0; fi
+            echo "attempt $i failed; waiting"; sleep 60
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: space-report, path: space-report.json, if-no-files-found: ignore }

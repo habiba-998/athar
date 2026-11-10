@@ -460,3 +460,75 @@ class TestHttpsAndCors:
             assert "access-control-allow-origin" not in r.headers, origin
         pre = remote.options("/api/environment", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "PUT"})
         assert "access-control-allow-origin" not in pre.headers
+
+
+# ============================================================================ Hugging Face Space (all-in-one container)
+
+def _hf_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("make_hf_space", ROOT / "scripts" / "make_hf_space.py")
+    mod = importlib.util.module_from_spec(spec)                     # type: ignore[arg-type]
+    spec.loader.exec_module(mod)                                    # type: ignore[union-attr]
+    return mod
+
+
+class TestHuggingFaceSpace:
+    @pytest.fixture(scope="class")
+    def space(self, tmp_path_factory):
+        out = tmp_path_factory.mktemp("space") / "s"
+        files = _hf_module().build(out)
+        return out, files
+
+    def test_the_assembled_space_is_self_contained_and_minimal(self, space):
+        out, files = space
+        for must in ("Dockerfile", "README.md", ".dockerignore", "backend/app/main.py", "backend/requirements.prod.txt",
+                     "frontend/package.json", "frontend/package-lock.json", "frontend/index.html", "frontend/vite.config.ts", "frontend/src/main.tsx"):
+            assert (out / must).is_file(), must
+        bad = [f for f in files if f.startswith(("backend/tests", "frontend/tests", "docs", "scripts", ".github")) or "node_modules" in f
+               or f.endswith((".db", ".env", ".pyc")) or f == "frontend/playwright.config.ts"]
+        assert not bad, bad
+        assert not (out / "vercel.json").exists() and not (out / "deploy").exists()
+
+    def test_the_space_card_matches_the_dockerfile_port_and_is_honest(self, space):
+        out, _ = space
+        card = (out / "README.md").read_text(encoding="utf-8")
+        front = card.split("---")[1]
+        assert "sdk: docker" in front and "app_port: 7860" in front
+        short = re.search(r"short_description: (.+)", front).group(1)
+        assert len(short) <= 60, "Spaces limit the short description to 60 characters"
+        docker = (out / "Dockerfile").read_text(encoding="utf-8")
+        assert "PORT=7860" in docker and "EXPOSE 7860" in docker and "${PORT}" in docker
+        assert "synthetic" in card.lower() and "read-only" in card.lower() and "not probabilities" in card.lower()
+
+    def test_the_space_container_is_the_read_only_demo_running_as_user_1000_without_secrets(self, space):
+        docker = (space[0] / "Dockerfile").read_text(encoding="utf-8")
+        assert "useradd -m -u 1000 user" in docker and "USER user" in docker
+        assert "ATHAR_MODE=demo" in docker and "ATHAR_ADMIN_TOKEN" not in docker and "ATHAR_API_TOKEN" not in docker
+        assert "ATHAR_TRUST_PROXY" not in docker.replace("ATHAR_TRUST_PROXY unset", "")      # proxy chain unknown: forwarded headers not trusted
+        origins = re.search(r'ATHAR_FRAME_ANCESTORS="([^"]+)"', docker).group(1).split()
+        assert origins == ["https://huggingface.co", "https://*.hf.space"]
+        assert not re.search(r"(?i)(token|key|secret|password)=\S{8,}", docker)
+
+    def test_rebuilding_never_overwrites_a_foreign_directory(self, tmp_path):
+        mod = _hf_module()
+        (tmp_path / "keep.txt").write_text("mine", encoding="utf-8")
+        with pytest.raises(SystemExit, match="not empty"):
+            mod.build(tmp_path)
+        with pytest.raises(SystemExit, match="refusing"):
+            mod.build(tmp_path, force=True)                                                 # not ours: no marker, nothing deleted
+        assert (tmp_path / "keep.txt").read_text(encoding="utf-8") == "mine"
+
+    def test_a_previous_build_can_be_replaced_and_the_result_is_deterministic(self, tmp_path):
+        mod = _hf_module()
+        a = mod.build(tmp_path / "s")
+        b = mod.build(tmp_path / "s", force=True)
+        assert a == b and a[-3:] == ["Dockerfile", "README.md", ".dockerignore"] and a[:-3] == sorted(a[:-3])
+
+    def test_frame_ancestors_default_to_none_and_only_accept_https_origins(self, monkeypatch):
+        assert main._frame_ancestors() == "'none'"
+        assert local.get("/api/health").headers["x-frame-options"] == "DENY"
+        monkeypatch.setenv("ATHAR_FRAME_ANCESTORS", "https://huggingface.co https://*.hf.space http://evil.example * https://* javascript:x")
+        assert main._frame_ancestors() == "https://huggingface.co https://*.hf.space"
+        assert "x-frame-options" not in local.get("/api/health").headers                   # the CSP list is the only control then
+        monkeypatch.setenv("ATHAR_FRAME_ANCESTORS", "* http://x")
+        assert main._frame_ancestors() == "'none'"

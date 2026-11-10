@@ -28,11 +28,13 @@ Requirements from the owner: free or lowest cost, **no card and no charges witho
 
 | Platform | Fit with this architecture | Cost / account facts found (sources checked 2026-11-09; re-check before relying on them) | Verdict |
 |---|---|---|---|
-| **Vercel (Hobby)** | Static app + Python (FastAPI/ASGI) function in one project; one origin, so no CORS or API base URL. The read-only demo needs no persistence, which suits a function with a read-only filesystem (only `/tmp` is writable). Docs state a 300 s maximum duration on Hobby with Fluid Compute, enough for the slowest request. | Free Hobby plan, deploys from GitHub; no card needed to start. | **Selected** |
+| **Vercel (Hobby)** | Static app + Python (FastAPI/ASGI) function in one project; one origin, so no CORS or API base URL. The read-only demo needs no persistence, which suits a function with a read-only filesystem (only `/tmp` is writable). Docs state a 300 s maximum duration on Hobby with Fluid Compute, enough for the slowest request. | Free Hobby plan, deploys from GitHub; no card needed to start. | Tried first; **unresolved** (see below): three projects were created, the backend project returned 500 and the main one stayed behind Vercel Authentication |
 | Cloudflare Pages + Workers | Python Workers are generally available on Pyodide (WebAssembly); FastAPI and Pydantic are listed as supported, NetworkX is pure Python. No SQLite persistence (would need a rewrite to D1 or Durable Objects) and per-request CPU limits on the free plan are far below ATHAR's 0.2-19 s requests. | Free tier exists, but CPU limits make it unsuitable without a paid plan. | Rejected: needs a rewrite and a paid CPU limit |
 | Railway | Runs the Dockerfile as-is, supports volumes (persistent SQLite). | One-time $5 trial credit (30 days or until spent), then a Free plan with small allowances or the $5/month Hobby plan; whether a card is required is reported inconsistently. | Rejected for now: not free for long and may need a card |
 | Fly.io | Runs the Dockerfile, volumes for SQLite. | Sources agree there is **no free allowance for new accounts**: a short trial, then a payment card is required. | Rejected: requires a card and incurs charges |
 | Render | Docker service from a Blueprint. | Free web service sleeps and has an ephemeral disk. | Dropped at the owner's request (the sign-in/setup did not work out) |
+| Netlify | Static frontend only: Netlify Functions run JavaScript/TypeScript and Go; a forum answer and a 2026 hosting guide say Python is not supported (unofficial adapters exist, unverified). | Free plan exists. | Rejected: cannot host the FastAPI backend |
+| **Hugging Face Docker Space** | Runs the repository's own Docker image (frontend + API on one origin), no rewrite of ATHAR, no second service. Free CPU hardware; the Space reads its settings (`sdk: docker`, `app_port`) from the README header. | Free tier exists; whether a card is required was **not found** in the sources I read, check on the site. The Docker Spaces docs say there is no built-in persistence, which suits the stateless demo. | **Selected** |
 
 **What is lost on Vercel, honestly.** A serverless function has no persistent disk and each instance has its own memory, so the deployment is the **read-only demo only**: no administrator writes (the admin token is deliberately not configured), the audit log and simulation history are not stored, and each cold start rebuilds state from the synthetic sample. Rate limits are per instance. The first request after idle can take a few seconds. If you need persistence, run the Docker image on a host with a volume (Option B) or add an external database (not implemented).
 
@@ -45,7 +47,28 @@ Sources: [Vercel function limits](https://vercel.com/docs/functions/limitations)
 | `ATHAR_MODE=local` (default) | Private instance. Without `ATHAR_API_TOKEN` only loopback clients are accepted; with it, every `/api` call needs the token. Full read/write. |
 | `ATHAR_MODE=demo` | **Public and read-only.** Anyone can read and run *stateless* simulations (not persisted, no AI calls, no audit rows). Every other write is refused with `403 read_only_demo` unless the request carries `ATHAR_ADMIN_TOKEN`. API docs are off, no cross-origin callers by default. A demo **refuses to start** if a configured secret is shorter than 16 characters or the two tokens are equal. |
 
-## Deploying to Vercel (selected): step by step
+## Deploying to a Hugging Face Docker Space (selected): step by step
+
+**What it is.** One container from `deploy/huggingface/Dockerfile` serves the built app and the API on one origin (no CORS, no API base URL, no localhost). It is the **public read-only demo** (`ATHAR_MODE=demo`, no admin token exists, simulations are not stored, runs as user 1000). The Space repository is a **derived build context** that `scripts/make_hf_space.py` assembles from this repository (Dockerfile, README with the Space settings, `backend/app`, the pinned runtime requirements, the frontend sources, nothing else). Your permanent address is `https://<hf-user>-<space-name>.hf.space` for as long as the Space exists (Hugging Face lowercases the name and turns dots/underscores into hyphens; copy the exact "Direct URL" the Space shows). **Free Spaces may be paused after inactivity and restart on the next visit; I did not verify the exact policy.**
+
+**Done and verified locally (no Docker on the development machine).** The assembled Space was built from scratch: `npm ci && npm run build` inside the assembled folder, a clean virtual environment from the pinned requirements, the app run with the Space's environment on port 7860: the deployment verifier passed 36 of 36, the browser loaded the dashboard through `/api`, a simulation returned `ephemeral: true`. CI additionally builds **the Space's own Dockerfile** and checks it runs as uid 1000 (job `image`).
+
+**What only you can do (accounts, tokens, approval).** I never see your password or token.
+1. Create a free account at https://huggingface.co/join and confirm your e-mail.
+2. *New Space*: owner = you, name `athar`, **SDK: Docker (Blank)**, hardware **CPU basic (free)**, visibility **Public**. Create it.
+3. *Settings > Access Tokens > Create new token*: a **fine-grained** token with *write* access to that Space only (or the classic *Write* token). Copy it once. **Never paste it into chat, a file in the repository or the frontend.**
+4. Publish, either way:
+   - **From GitHub CI (recommended; only green commits are pushed).** In the GitHub repository *Settings > Secrets and variables > Actions*: add secret `HF_TOKEN` (the token), variables `HF_SPACE` = `<hf-user>/athar` and `SPACE_URL` = the Space's direct URL. Then re-run the latest workflow (or push any commit): the job `deploy-space` assembles the Space, force-pushes it, and re-verifies `SPACE_URL` from outside.
+   - **By hand.** `python scripts/make_hf_space.py --out build/hf-space`, then `cd build/hf-space; git init -b main; git add -A; git commit -m "ATHAR"; git remote add space https://huggingface.co/spaces/<hf-user>/athar; git push --force space main`. Git asks for a username and password in your terminal: user name = your Hugging Face name, password = the token.
+5. Watch the Space page: *Building* then *Running* (first build takes a few minutes). Then verify from your machine:
+   ```powershell
+   python scripts/verify_deployment.py https://<hf-user>-athar.hf.space --json space-report.json
+   ```
+   Every line must say PASS. Open it on a phone over mobile data. Send me the address and I will run the device checks and write it into the README only after they pass.
+
+**Settings you may meet.** `app_port: 7860` in the Space README must equal the port in the Dockerfile (a test checks it). The Space page embeds the app in an iframe, so the container allows framing by `https://huggingface.co` and `https://*.hf.space` only (`ATHAR_FRAME_ANCESTORS`); everyone else is still refused. Forwarded headers are not trusted (the platform's proxy chain is not documented here), so the per-client rate limits are shared and are raised to 3000/600/300 per minute.
+
+## Deploying to Vercel (tried first; unresolved): step by step
 
 ### Already done
 1. Code on GitHub (`habiba-998/athar`), CI green, Services layout in place, backend defaults tested locally.
