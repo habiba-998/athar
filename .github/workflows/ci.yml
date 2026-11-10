@@ -121,10 +121,29 @@ jobs:
           python3 scripts/verify_deployment.py http://127.0.0.1:7860 --allow-insecure-local
           docker rm -f athar-space
 
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci
+      - name: Build the static site (Python backend bundled for the browser)
+        run: npm run build:static
+      - name: Serve it with the production headers and verify it from the outside
+        run: |
+          npm run preview:static &
+          for i in $(seq 1 40); do curl -fs -o /dev/null http://127.0.0.1:5185/ && break; sleep 2; done
+          python3 ../scripts/verify_deployment.py http://127.0.0.1:5185 --static --allow-insecure-local
+      - uses: actions/upload-artifact@v4
+        with: { name: dist-static, path: frontend/dist-static, retention-days: 7 }
+
   # The release gate: this job is the ONLY dependency of deploy, and it lists every check that must be green.
   gate:
     runs-on: ubuntu-latest
-    needs: [backend, frontend, e2e, mutation, image]
+    needs: [backend, frontend, e2e, mutation, image, static]
     steps:
       - run: echo "all required checks passed"
 
@@ -194,3 +213,21 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: space-report, path: space-report.json, if-no-files-found: ignore }
+
+  # GitHub Pages (optional, no extra account): runs only when the repository variable ENABLE_PAGES is "true" (and Pages is set to
+  # "GitHub Actions" in Settings > Pages). The static site uses relative URLs, so the /<repo>/ sub-path works. Pages cannot set
+  # response headers, so the CSP/HSTS of the Netlify deployment are NOT available there.
+  pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_PAGES == 'true'
+    needs: [gate]
+    runs-on: ubuntu-latest
+    permissions: { pages: write, id-token: write }
+    environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist-static, path: site }
+      - run: rm -f site/_headers
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -67,11 +67,26 @@ export function formatDetail(body: unknown, fallback: string): string {
   return fallback
 }
 
+/**
+ * STATIC build (`vite build --mode static`): there is no server. The unchanged Python backend runs inside the browser (Pyodide in a
+ * Web Worker) and API calls are answered by it. Otherwise: an ordinary fetch to the API origin.
+ */
+export const STATIC_MODE = import.meta.env.MODE === 'static'
+
+async function transport(path: string, init: RequestInit | undefined, headers: Record<string, string>) {
+  if (STATIC_MODE) {
+    const { inBrowserRequest } = await import('./inbrowser/client')
+    const r = await inBrowserRequest(path, { method: init?.method, headers, body: typeof init?.body === 'string' ? init.body : null })
+    return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => JSON.parse(r.body) as unknown }
+  }
+  return fetch(apiUrl(path), { ...init, headers })
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   const t = tokenStore.get()
   if (t) headers['x-athar-token'] = t
-  const r = await fetch(apiUrl(path), { ...init, headers })
+  const r = await transport(path, init, headers)
   if (!r.ok) {
     let body: unknown = null
     try {

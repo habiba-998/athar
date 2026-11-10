@@ -1,0 +1,12 @@
+# Netlify: the STATIC build. No server is involved: the unchanged Python backend runs inside the visitor's browser (Pyodide /
+# WebAssembly, in a Web Worker), so a plain static host is enough. See docs/DEPLOYMENT.md.
+[build]
+  base = "frontend"
+  command = "npm ci && npm run build:static"
+  publish = "dist-static"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Security headers (CSP with only 'wasm-unsafe-eval', HSTS, framing, ...) are written to dist-static/_headers by the build
+# from frontend/static-headers.json, the same file the browser tests run against.

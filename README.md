@@ -49,7 +49,7 @@ python -m uvicorn app.main:app --port 8200      # serves API and the built app o
 
 `ATHAR_MODE=demo` is the **public read-only mode**: visitors can read and run stateless simulations; every write needs the admin token. See [Deployment](docs/DEPLOYMENT.md).
 
-> **Deployment status: not deployed.** No public URL exists. Selected host: a **Hugging Face Docker Space** (free, one container serves app and API); the assembled Space was run and verified locally and CI builds its image, but publishing needs your Hugging Face account and token: exact steps in [Deployment](docs/DEPLOYMENT.md). A Vercel attempt is unresolved. Do not quote any URL that has not passed the verifier from outside.
+> **Deployment status: not deployed.** No public URL exists. Selected: a **static build on Netlify** in which the unchanged Python backend runs inside the visitor's browser (Pyodide / WebAssembly), so no server is needed. It is built and tested locally (browser suite, strict CSP, zero requests to any other origin); publishing needs your Netlify account: exact steps in [Deployment](docs/DEPLOYMENT.md). Also prepared: a Hugging Face Docker Space (real server) and a Vercel attempt that is unresolved. Do not quote any URL that has not passed the verifier from outside.
 
 ## Configuration
 

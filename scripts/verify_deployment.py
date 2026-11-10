@@ -81,6 +81,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("url", help="base URL of the deployment, e.g. https://example.org")
     ap.add_argument("--allow-insecure-local", action="store_true", help="permit http:// for a loopback rehearsal (not a deployment check)")
+    ap.add_argument("--static", action="store_true", help="the target is the STATIC build (Python runs in the browser): there is no /api to call")
     ap.add_argument("--json", metavar="FILE", help="also write the results as JSON")
     ap.add_argument("--admin-token-env", metavar="VAR", help="name of an environment variable holding the administrator token (optional)")
     args = ap.parse_args()
@@ -109,6 +110,10 @@ def main() -> int:
         except (OSError, ssl.SSLError) as e:
             rep.check("tls certificate validates", False, type(e).__name__)
             return finish(rep, args)
+
+    if args.static:
+        verify_static(rep, base, u)
+        return finish(rep, args)
 
     try:
         health = request(f"{base}/api/health")
@@ -196,6 +201,42 @@ def main() -> int:
     else:
         rep.add("SKIP", "admin token checks", "not requested (--admin-token-env)")
     return finish(rep, args)
+
+
+def verify_static(rep: Report, base: str, u) -> bool:
+    """Outside-in checks of the static site. The functional proof (the engine really starts and answers) is the browser suite:
+    ATHAR_STATIC_URL=<url> npx playwright test -c playwright.external.config.ts"""
+    page = request(f"{base}/")
+    html = page.text
+    rep.check("single-page app is served", page.status == 200 and 'id="root"' in html, f"HTTP {page.status}")
+    csp = page.headers.get("content-security-policy", "")
+    rep.check("CSP: default-src 'self' and WebAssembly allowed without unsafe-eval", "default-src 'self'" in csp and "'wasm-unsafe-eval'" in csp
+              and "'unsafe-eval'" not in csp.replace("'wasm-unsafe-eval'", ""))
+    rep.check("CSP: no third-party origin", "http://" not in csp and not re.search(r"https://[a-z]", csp))
+    fa = re.search(r"frame-ancestors ([^;]+)", csp)
+    rep.check("page cannot be framed by arbitrary sites", page.headers.get("x-frame-options", "") == "DENY" or bool(fa and "*" not in fa.group(1)))
+    for hname, want in (("x-content-type-options", "nosniff"), ("referrer-policy", "no-referrer")):
+        rep.check(f"page header {hname}", want in page.headers.get(hname, ""))
+    if u.scheme == "https":
+        rep.check("page header strict-transport-security", "max-age=" in page.headers.get("strict-transport-security", ""))
+    wasm = request(f"{base}/pyodide/pyodide.asm.wasm")
+    rep.check("Python runtime (WebAssembly) is self-hosted", wasm.status == 200 and "wasm" in wasm.headers.get("content-type", ""), f"HTTP {wasm.status}")
+    lock = request(f"{base}/pyodide/pyodide-lock.json")
+    names = sorted(json.loads(lock.text)["packages"]) if lock.status == 200 else []
+    rep.check("runtime lock lists the bundled libraries", {"pydantic", "fastapi", "networkx", "starlette"} <= set(names), ", ".join(names[:6]))
+    src = request(f"{base}/pyodide/athar-backend.json")
+    files = json.loads(src.text)["files"] if src.status == 200 else {}
+    rep.check("the backend source ships with the site", "main.py" in files and "analysis.py" in files, f"{len(files)} files")
+    assets = sorted(set(re.findall(r'(?:src|href)="\./(assets/[^"]+\.(?:js|css))"', html)))
+    blob = html
+    for a in assets[:12]:
+        blob += request(f"{base}/{a}").text
+    rep.check("bundle references found", bool(assets), f"{len(assets)} asset files")
+    local = sorted(set(LOCAL_PATTERN.findall(blob)))
+    rep.check("bundle contains no localhost or private-network address", not local, ", ".join(local[:3]))
+    rep.check("bundle contains no secret-looking strings", not [p for p in SECRET_PATTERNS if re.search(p, blob)])
+    rep.check("no server API is advertised or needed", request(f"{base}/api/health").headers.get("content-type", "").find("application/json") < 0)
+    return True
 
 
 def finish(rep: Report, args) -> int:

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { api, ApiError, tokenStore } from './api'
+import { api, ApiError, STATIC_MODE, tokenStore } from './api'
 import Dashboard from './Dashboard'
 import AssumptionsTab from './AssumptionsTab'
 import EnvTab from './EnvTab'
@@ -223,6 +223,7 @@ export default function App() {
           </nav>
 
           <div className="ms-auto flex flex-wrap items-center gap-2">
+            {STATIC_MODE && <span className="rounded-md border border-hairline-2 px-2 py-1 text-xs text-mist" data-testid="chip-engine">{t('chip.engine')}</span>}
             <span className="inline-flex items-center gap-1.5 rounded-md border border-teal/40 bg-teal/10 px-2 py-1 text-xs font-medium text-teal" data-testid="chip-synthetic"><Icon name="shield" size={13} />{t('chip.synthetic')}</span>
             {auth?.read_only && <span className="inline-flex items-center gap-1.5 rounded-md border border-high/45 bg-high/10 px-2 py-1 text-xs font-medium text-high-fg" data-testid="chip-demo"><Icon name="eye" size={13} />{readOnly ? t('chip.demo') : t('chip.admin')}</span>}
             {auth?.admin_token_supported && <Button variant="quiet" icon="lock" onClick={() => setAdminOpen(true)} data-testid="admin-open">{t('admin.open')}</Button>}
@@ -266,7 +267,7 @@ export default function App() {
             </div>
           </Panel>
         ) : !data ? (
-          <Spinner label={t('state.loading')} />
+          <><Spinner label={t('state.loading')} />{STATIC_MODE && <p className="px-8 text-sm text-faint" data-testid="engine-note">{t('engine.note')}</p>}</>
         ) : (
           <>
             <div className="mb-5">

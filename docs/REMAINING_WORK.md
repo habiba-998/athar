@@ -40,7 +40,7 @@ See `TECHNICAL_VALIDATION.md` (L1 to L10), `SECURITY.md`, and `CLAIMS.md` ("Expe
 
 | # | Work | Why | Effort |
 |---|---|---|---|
-| 16 | **Publish a real deployment** (Vercel config is ready) and run `verify_deployment.py` against it | Needs a hosting account and a person to authorise it; no URL exists today | hours |
+| 16 | **Publish a real deployment**: connect the repository to Netlify (static build, `netlify.toml` is ready; steps in `docs/DEPLOYMENT.md`) and run `verify_deployment.py --static` plus `playwright.external.config.ts` against the URL | Needs the owner's Netlify account and approval; no URL exists today | minutes |
 | 17 | Calibrate the weights, now that a sensitivity view shows which ones matter (`exposure_bonus`, `evidence_observed`, `length_penalty` on Meridian) | Same gap as #1, but the sensitivity analysis says where to start | weeks |
 | 18 | Evidence ingestion that fills `evidence_source`, `collected_at` and `confidence` from an IAM export or scanner instead of the author | Provenance fields are still declared | weeks |
 | 19 | Real authentication, roles and per-user audit for the admin role (the demo uses one shared token) | Single admin token | 1-2 weeks |

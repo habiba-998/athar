@@ -43,6 +43,13 @@ export default defineConfig({
       env: { ATHAR_DB: demoDb, ATHAR_MODE: 'demo', ATHAR_ADMIN_TOKEN: DEMO_ADMIN_TOKEN, ATHAR_RATE_READ: '5000', ATHAR_RATE_WRITE: '5000', ATHAR_RATE_EXPLAIN: '5000' },
     },
     {
+      // the STATIC build (no server: the Python backend runs in the browser), served with the production security headers
+      command: 'npm run build:static && npm run preview:static',
+      url: 'http://127.0.0.1:5185',
+      timeout: 300_000,
+      reuseExistingServer: false,
+    },
+    {
       command: `npx vite --host 127.0.0.1 --port ${DEMO_WEB_PORT} --strictPort`,
       url: `http://127.0.0.1:${DEMO_WEB_PORT}`,
       reuseExistingServer: false,

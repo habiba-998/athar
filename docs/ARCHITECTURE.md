@@ -109,6 +109,10 @@ flowchart LR
 | Min-cut edges inserted in id order | The chosen cut does not depend on input ordering (tested). |
 | Single image serves API and SPA | One origin: no CORS and one URL to verify. |
 
+## Static build: the backend inside the browser (Netlify route)
+
+`npm run build:static` (in `frontend/`) produces `dist-static/`, a purely static site with no server. `scripts/prepare-pyodide.mjs` bundles Pyodide 314.0.7 (CPython 3.14 compiled to WebAssembly) and the wheels of its roots (`pydantic`, `networkx`, `fastapi`, `starlette` and their dependencies, sha256-checked against the Pyodide lock), plus `backend/app` as a JSON file. A Web Worker (`src/inbrowser/worker.ts`) boots Pyodide, installs the backend and loads `src/inbrowser/bridge.py`, which builds an ASGI scope for each `fetch('/api/...')` of the frontend (`api.ts`, `STATIC_MODE`), runs the **unchanged** FastAPI app in process and returns status, headers and body. The thread pool is replaced by inline calls because WebAssembly has no threads. The engine is always the read-only demo (`ATHAR_MODE=demo`), with one private state per browser tab. `scripts/write-headers.mjs` turns `static-headers.json` into the Netlify `_headers` file (CSP with `'wasm-unsafe-eval'` only, HSTS, no framing). Tests: `backend/tests/test_inbrowser_bridge.py` (the bridge answers exactly like the HTTP app under CPython; config consistency), `frontend/tests/static.spec.ts` (real WebAssembly build behind the production headers: zero third-party and zero `/api` requests, all features, Arabic RTL, phone width), `scripts/verify_deployment.py --static`.
+
 ## API reference (all paths under `/api`)
 
 | Method and path | Purpose | Public demo, visitor |

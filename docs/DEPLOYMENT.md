@@ -13,6 +13,7 @@ What *is* done and verified:
 | Dependency advisories | `pip-audit` on the production pins: **no known vulnerabilities**; `npm audit` (production, and all): **0 vulnerabilities** (2026-11-09) |
 | CI/CD (`.github/workflows/ci.yml`) | **ran on GitHub: all 7 jobs green** on the first push (backend, frontend, e2e, mutation, image, gate, deploy) |
 | Hosting configuration (`vercel.json` with a `services` block, `backend/pyproject.toml` `[tool.vercel]`, `backend/requirements.txt`, `backend/.python-version`) | written; the backend runs as the read-only demo when `VERCEL=1` (tested locally through the ASGI test client); **not yet deployed, so the Vercel build itself is unverified** |
+| **Static build for Netlify** (`netlify.toml`, `npm run build:static`): the unchanged backend runs in the browser (Pyodide/WebAssembly) | built locally; 5 browser tests pass behind the production headers (zero third-party and zero `/api` requests); `verify_deployment.py --static` 13 passed, 0 failed, 1 skipped (HSTS, needs https); the same browser tests also pass through `playwright.external.config.ts` against the local build. CI job `static` added (not yet run on GitHub) |
 | External verification (`scripts/verify_deployment.py`) | rehearsed against local production-mode servers only |
 
 ## Hosting platform evaluation (2026-11-09)
@@ -33,8 +34,8 @@ Requirements from the owner: free or lowest cost, **no card and no charges witho
 | Railway | Runs the Dockerfile as-is, supports volumes (persistent SQLite). | One-time $5 trial credit (30 days or until spent), then a Free plan with small allowances or the $5/month Hobby plan; whether a card is required is reported inconsistently. | Rejected for now: not free for long and may need a card |
 | Fly.io | Runs the Dockerfile, volumes for SQLite. | Sources agree there is **no free allowance for new accounts**: a short trial, then a payment card is required. | Rejected: requires a card and incurs charges |
 | Render | Docker service from a Blueprint. | Free web service sleeps and has an ephemeral disk. | Dropped at the owner's request (the sign-in/setup did not work out) |
-| Netlify | Static frontend only: Netlify Functions run JavaScript/TypeScript and Go; a forum answer and a 2026 hosting guide say Python is not supported (unofficial adapters exist, unverified). | Free plan exists. | Rejected: cannot host the FastAPI backend |
-| **Hugging Face Docker Space** | Runs the repository's own Docker image (frontend + API on one origin), no rewrite of ATHAR, no second service. Free CPU hardware; the Space reads its settings (`sdk: docker`, `app_port`) from the README header. | Free tier exists; whether a card is required was **not found** in the sources I read, check on the site. The Docker Spaces docs say there is no built-in persistence, which suits the stateless demo. | **Selected** |
+| **Netlify (static, engine in the browser)** | Netlify Functions run JavaScript/TypeScript and Go only (confirmed in its current docs: no Python page, no FastAPI), so the backend cannot run there as a server. It does not need to: the same Python code runs in the visitor's browser (Pyodide/WebAssembly) and the site is purely static. Free plan: 300 credits/month with a hard limit (docs); whether a card is needed to sign up is **not stated** in the pages I read. | **Selected** (no server, no second host) |
+| Hugging Face Docker Space | Runs the repository's own Docker image (frontend + API on one origin), no rewrite of ATHAR, no second service. Free CPU hardware; the Space reads its settings (`sdk: docker`, `app_port`) from the README header. | Free tier exists; whether a card is required was **not found** in the sources I read, check on the site. The Docker Spaces docs say there is no built-in persistence, which suits the stateless demo. | Prepared as the alternative that runs a real server (sign-up hit a human-check wall) |
 
 **What is lost on Vercel, honestly.** A serverless function has no persistent disk and each instance has its own memory, so the deployment is the **read-only demo only**: no administrator writes (the admin token is deliberately not configured), the audit log and simulation history are not stored, and each cold start rebuilds state from the synthetic sample. Rate limits are per instance. The first request after idle can take a few seconds. If you need persistence, run the Docker image on a host with a volume (Option B) or add an external database (not implemented).
 
@@ -47,7 +48,30 @@ Sources: [Vercel function limits](https://vercel.com/docs/functions/limitations)
 | `ATHAR_MODE=local` (default) | Private instance. Without `ATHAR_API_TOKEN` only loopback clients are accepted; with it, every `/api` call needs the token. Full read/write. |
 | `ATHAR_MODE=demo` | **Public and read-only.** Anyone can read and run *stateless* simulations (not persisted, no AI calls, no audit rows). Every other write is refused with `403 read_only_demo` unless the request carries `ATHAR_ADMIN_TOKEN`. API docs are off, no cross-origin callers by default. A demo **refuses to start** if a configured secret is shorter than 16 characters or the two tokens are equal. |
 
-## Deploying to a Hugging Face Docker Space (selected): step by step
+## Deploying the static site to Netlify (selected): step by step
+
+**What it is.** Netlify cannot run Python (its documented function runtimes are JavaScript/TypeScript and Go), so there is no server to deploy. Instead the **unchanged Python backend runs inside the visitor's browser**: Pyodide (CPython compiled to WebAssembly) in a Web Worker loads `backend/app` and answers every `/api/...` call of the frontend through an in-process ASGI bridge (`frontend/src/inbrowser/bridge.py`). Routing, validation, the read-only demo guard, scoring, plans, sensitivity and explanations are the same code as the server deployment, and the browser test suite exercises them end to end. The whole site is static files: `npm run build:static` produces `frontend/dist-static` (the app, the self-hosted Python runtime and libraries, the backend source, and a `_headers` file with the security headers). **Nothing is requested from any third-party host and no API request ever leaves the page** (a browser test asserts both).
+
+**Measured here (Chromium, development laptop).** Python runtime + libraries about 16 MB on the first visit (cached afterwards, as the files are content-immutable); the dashboard appears 13-30 s after the first visit in the tests; analysis and recommendations are computed in under a second inside WebAssembly, plans about 0.7 s, a sensitivity run about 2.3 s (in Node's WebAssembly; phones were **not** measured and will be slower). Each visitor has a **private engine and state**: nothing is stored or shared, a reload resets everything, and it is the read-only demo only (no administrator, no editing, no stored history).
+
+**What only you can do (accounts and approval).** I never see your password.
+1. Sign in at https://app.netlify.com (the free plan; do not upgrade). If a human-check page blocks you ("Max challenge attempts exceeded"), see the troubleshooting list in the conversation or try *Continue with GitHub*.
+2. *Add new site > Import an existing project > GitHub*, authorise Netlify for the repository `habiba-998/athar` only.
+3. Netlify reads `netlify.toml`: base directory `frontend`, build command `npm ci && npm run build:static`, publish directory `dist-static`, Node 22. **Leave everything as detected and add no environment variables.** Click *Deploy*.
+4. When the deploy is published Netlify shows `https://<name>.netlify.app` (you may rename it under *Site configuration > Change site name*). That is the permanent HTTPS address.
+5. Verify from outside (I will run the same):
+   ```powershell
+   python scripts/verify_deployment.py https://<name>.netlify.app --static
+   $env:ATHAR_STATIC_URL = "https://<name>.netlify.app"; cd frontend; npx playwright test -c playwright.external.config.ts
+   ```
+   The first checks the headers, the self-hosted runtime and the bundle; the second really starts the engine in a browser and runs the dashboard, recommendations, plans, simulation and sensitivity against the live site. Then open it on your phone over mobile data.
+6. Send me the address. I will write it into the README only after both pass.
+
+**No new account at all: GitHub Pages.** The same static build can be published from this repository with no extra service: *Settings > Pages > Source: GitHub Actions*, then add the repository variable `ENABLE_PAGES` = `true`; the `pages` job publishes `https://habiba-998.github.io/athar/` after the gate. Pages cannot set response headers, so the CSP/HSTS of the Netlify deployment are **not** available there (the page still works: a relative-URL build).
+
+**Known limits (honest).** Needs a browser with WebAssembly and module workers (verified: Chromium only; Safari 15+/Firefox 114+ are expected to work, not tested). Pyodide ships its own library versions (Python 3.14, pydantic 2.12.5, FastAPI 0.136.1, Starlette 1.0.0) which differ from the server lock (Python 3.12, pydantic 2.14.3, FastAPI 0.162.2); the bridge parity tests run under CPython and the browser tests run the real WebAssembly build, but the full 1,000-test backend suite does not run inside WebAssembly. The wheels are downloaded at build time from the official Pyodide distribution of the pinned version and **checked against its sha256 lock** before use.
+
+## Deploying to a Hugging Face Docker Space (alternative with a real server): step by step
 
 **What it is.** One container from `deploy/huggingface/Dockerfile` serves the built app and the API on one origin (no CORS, no API base URL, no localhost). It is the **public read-only demo** (`ATHAR_MODE=demo`, no admin token exists, simulations are not stored, runs as user 1000). The Space repository is a **derived build context** that `scripts/make_hf_space.py` assembles from this repository (Dockerfile, README with the Space settings, `backend/app`, the pinned runtime requirements, the frontend sources, nothing else). Your permanent address is `https://<hf-user>-<space-name>.hf.space` for as long as the Space exists (Hugging Face lowercases the name and turns dots/underscores into hyphens; copy the exact "Direct URL" the Space shows). **Free Spaces may be paused after inactivity and restart on the next visit; I did not verify the exact policy.**
 
@@ -116,7 +140,7 @@ python scripts/verify_deployment.py https://<project>.vercel.app --json deployme
 then the device profiles (Android, iPhone, tablet, desktop; English and Arabic) with the Playwright suite pointed at the public address. These run from this laptop, which is not a truly independent network: open the address on your phone over **mobile data** for the real external check.
 
 ### Why a red check cannot reach production
-Vercel's production branch is `release`. Only the CI `deploy` job can update it, `deploy` needs `gate`, and `gate` needs all five jobs. A failing job therefore stops the promotion; the previous release stays live.
+Vercel's production branch is `release`. Only the CI `deploy` job can update it, `deploy` needs `gate`, and `gate` needs all six jobs (backend, frontend, e2e, mutation, image, static). A failing job therefore stops the promotion; the previous release stays live.
 
 ## Fallback if Vercel Services cannot host the backend
 Services is a Beta feature. If the build fails in a way I cannot fix from the log, the compatible free alternative that keeps the frontend on Vercel is: backend as the Docker image on a no-card host (for example a Hugging Face Docker Space, which serves on one port and is free but has an ephemeral disk; **unverified here**), frontend on Vercel built with `VITE_API_BASE=https://<backend-address>` and the backend started with `ATHAR_CORS_ORIGINS=https://<project>.vercel.app`. I would only do this after the Services attempt fails.

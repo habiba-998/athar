@@ -80,3 +80,14 @@ Status key: **Verified** = backed by an automated test or a reproducible script 
 - **Pareto optimality** is relative to the generated plans; **no claim of global optimality** is made. The only exact component is the weighted minimum cut, and only for its own objective.
 - **Digital-twin realism**: Meridian is invented to resemble typical enterprise structure; it is not derived from any real organisation and was not validated by practitioners.
 - **Deployment**: the deployment package is prepared and rehearsed locally. **No public URL exists unless `scripts/verify_deployment.py` has passed against it.**
+
+### Static (in-browser) build
+
+| Claim | Status | Evidence / limit |
+|---|---|---|
+| The unchanged backend answers the frontend's API calls inside the browser through an ASGI bridge, identically to the HTTP application | Verified under CPython (status and body equal for 10 endpoints, simulate, writes denied) | `test_inbrowser_bridge.py` |
+| The same bridge runs in WebAssembly (Pyodide) and every feature works behind the strict production headers with zero third-party and zero API requests | Verified in Chromium against the local production build | `frontend/tests/static.spec.ts` (5 tests) |
+| The library versions in WebAssembly equal the server lock | **Not claimed**: Pyodide ships its own (pydantic 2.12.5, FastAPI 0.136.1, Python 3.14) | the 1,000-test backend suite runs under CPython only |
+| Works on iPhone/Safari and Firefox | **Not verified** (Chromium device emulation only) | |
+| A public Netlify deployment exists | **No**: not deployed until the owner connects the repository and the verifier passes against the real URL | |
+

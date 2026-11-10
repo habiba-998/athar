@@ -186,6 +186,8 @@ export const enExt = {
   'graph.fullscreen.exit': 'Exit full screen',
   'path.weakest': 'weakest hop',
   'path.drivers': 'What holds the score back',
+  'engine.note': 'Starting the analysis engine inside your browser. The first visit downloads about 16 MB; nothing is sent to a server.',
+  'chip.engine': 'Engine: in your browser',
 }
 
 export const arExt: Record<keyof typeof enExt, string> = {
@@ -372,4 +374,6 @@ export const arExt: Record<keyof typeof enExt, string> = {
   'graph.fullscreen.exit': 'إنهاء ملء الشاشة',
   'path.weakest': 'أضعف حلقة',
   'path.drivers': 'ما الذي يخفض الدرجة',
+  'engine.note': 'جارٍ تشغيل محرك التحليل داخل متصفحك. تنزّل الزيارة الأولى نحو 16 ميغابايت، ولا يُرسَل شيء إلى أي خادم.',
+  'chip.engine': 'المحرك: داخل متصفحك',
 }
