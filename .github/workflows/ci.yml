@@ -214,16 +214,17 @@ jobs:
         if: always()
         with: { name: space-report, path: space-report.json, if-no-files-found: ignore }
 
-  # GitHub Pages (optional, no extra account): runs only when the repository variable ENABLE_PAGES is "true" (and Pages is set to
-  # "GitHub Actions" in Settings > Pages). The static site uses relative URLs, so the /<repo>/ sub-path works. Pages cannot set
+  # GitHub Pages (no extra account): enabled by this job itself (configure-pages, enablement) unless the repository variable DISABLE_PAGES is "true". The static site uses relative URLs, so the /<repo>/ sub-path works. Pages cannot set
   # response headers, so the CSP/HSTS of the Netlify deployment are NOT available there.
   pages:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.ENABLE_PAGES == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DISABLE_PAGES != 'true'
     needs: [gate]
     runs-on: ubuntu-latest
     permissions: { pages: write, id-token: write }
     environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
     steps:
+      - uses: actions/configure-pages@v5
+        with: { enablement: true }
       - uses: actions/download-artifact@v4
         with: { name: dist-static, path: site }
       - run: rm -f site/_headers
@@ -231,3 +232,11 @@ jobs:
         with: { path: site }
       - id: deploy
         uses: actions/deploy-pages@v4
+      - name: Check the published site from outside (index, WebAssembly runtime, backend source)
+        run: |
+          u="${{ steps.deploy.outputs.page_url }}"
+          for i in $(seq 1 20); do curl -fsS -o /dev/null "$u" && break; sleep 6; done
+          curl -fsS "$u" | grep -q 'id="root"'
+          curl -fsSI "${u}pyodide/pyodide.asm.wasm" | head -1
+          curl -fsS "${u}pyodide/athar-backend.json" | grep -q '"main.py"'
+          echo "published: $u"
