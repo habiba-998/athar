@@ -489,6 +489,15 @@ class TestHuggingFaceSpace:
         assert not bad, bad
         assert not (out / "vercel.json").exists() and not (out / "deploy").exists()
 
+    def test_every_file_the_build_config_reads_is_in_the_space(self, space):
+        """vite.config.ts reads static-headers.json while it is loaded; a file missing from the Space breaks `npm run build` there."""
+        out, _ = space
+        cfg = (out / "frontend" / "vite.config.ts").read_text(encoding="utf-8")
+        read = re.findall(r"new URL\('\./([^']+)', import\.meta\.url\)", cfg)
+        assert "static-headers.json" in read
+        for rel in read:
+            assert (out / "frontend" / rel).is_file(), rel
+
     def test_the_space_card_matches_the_dockerfile_port_and_is_honest(self, space):
         out, _ = space
         card = (out / "README.md").read_text(encoding="utf-8")

@@ -18,9 +18,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MARKER = ".athar-hf-space"
-# frontend files needed by `npm ci && npm run build` (tsconfig includes only src/ and vite.config.ts)
+# frontend files needed by `npm ci && npm run build` (tsconfig includes only src/ and vite.config.ts; vite.config.ts reads static-headers.json)
 FRONTEND_KEEP = ("frontend/src/", "frontend/index.html", "frontend/package.json", "frontend/package-lock.json",
-                 "frontend/tsconfig.json", "frontend/vite.config.ts")
+                 "frontend/tsconfig.json", "frontend/vite.config.ts", "frontend/static-headers.json")
 BACKEND_KEEP = ("backend/app/", "backend/requirements.prod.txt")
 SKIP_PARTS = {"__pycache__", "node_modules", "dist"}
 
